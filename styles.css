@@ -121,7 +121,9 @@ footer { text-align: center; margin-top: 32px; }
   cursor: pointer;
   min-height: 60px;
 }
-.opt-btn:hover:not(:disabled) { border-color: var(--accent); }
+@media (hover: hover) {
+  .opt-btn:hover:not(:disabled) { border-color: var(--accent); }
+}
 .opt-btn:disabled { cursor: default; opacity: 0.55; }
 .opt-btn.right { border-color: var(--good); background: var(--good-bg); opacity: 1; }
 .opt-btn.wrong { border-color: var(--bad); background: var(--bad-bg); opacity: 1; }
@@ -173,3 +175,9 @@ footer { text-align: center; margin-top: 32px; }
   .hanzi { font-size: 72px; }
   .stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Phones: no keyboard shortcuts to show, and keep clear of the notch / home bar. */
+@media (hover: none) {
+  .opt-btn kbd { display: none; }
+}
+#app { padding-top: env(safe-area-inset-top); padding-bottom: calc(48px + env(safe-area-inset-bottom)); }

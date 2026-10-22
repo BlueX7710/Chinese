@@ -39,7 +39,40 @@ Edit the blocked sites in **Settings** (after finishing that day's lesson).
 
 ### As a plain web page
 
-Open `index.html` in any browser, or host the folder on GitHub Pages. You get the lessons and streaks, but no site blocking. Progress is stored in that browser's local storage.
+Open `index.html` in any browser. You get the lessons and streaks, but no site blocking. Progress is stored in that browser's local storage.
+
+### On your phone (iPhone or Android)
+
+The app installs to your home screen and works offline. It needs to be hosted at a web address first (see **Hosting** below).
+
+- **iPhone:** open the link in Safari → Share → **Add to Home Screen**.
+- **Android:** open the link in Chrome → ⋮ menu → **Install app** (or **Add to Home screen**).
+
+Your progress is stored on each device separately, so your phone and computer each keep their own streak.
+
+#### Making your iPhone force you too (optional, ~5 minutes)
+
+A web app can't block other apps by itself, but iPhone's built-in **Shortcuts** app can. Do your lessons in **Safari** for this (on iPhone, Safari and home-screen apps keep separate progress).
+
+1. **Create the unlock shortcut.** Shortcuts → **+** → name it exactly `Hanzi Unlock`. Add these actions:
+   - **Current Date** → **Format Date** (Custom format: `yyyy-MM-dd`)
+   - **Save File** → save the formatted date to `Shortcuts/hanzi-done.txt`, with **Overwrite If File Exists** on and **Ask Where to Save** off.
+2. **Create the gate shortcut.** New shortcut named `Hanzi Gate`:
+   - **Get File** `Shortcuts/hanzi-done.txt` (turn off "Error If Not Found")
+   - **Current Date** → **Format Date** (`yyyy-MM-dd`)
+   - **If** *File* **is not** *Formatted Date* → **Open URLs** `https://YOUR-SITE/index.html?gate=ios` → **End If**
+3. **Trigger it.** Automation tab → **+** → **App** → choose Instagram, TikTok, YouTube etc. → **Is Opened** → **Run Immediately** → action: **Run Shortcut** `Hanzi Gate`.
+4. **(Optional) Daily nag.** Another automation → **Time of Day** (e.g. 7 pm) → **Open URLs** `https://YOUR-SITE/index.html?gate=ios`.
+
+Now opening a locked app throws you into the lesson. When you finish, tap **Unlock my apps for today**. That runs `Hanzi Unlock`, and the locked apps open normally until midnight.
+
+On **Android** there's no built-in equivalent. Use Digital Wellbeing app timers, or an automation app such as MacroDroid, to open the lesson link when a distracting app launches.
+
+## Hosting
+
+The app is plain static files, so any static host works:
+- **GitHub Pages:** repo Settings → Pages → Source: *Deploy from a branch* → pick the branch and `/ (root)`. Your link will be `https://<username>.github.io/<repo>/`. (Free for public repos.)
+- **Netlify:** drag this folder onto https://app.netlify.com/drop.
 
 ## Audio
 
@@ -56,3 +89,4 @@ Pronunciation uses your system's text-to-speech. If you hear nothing, install a 
 | `words.js` | HSK 1 vocabulary — add more words here |
 | `shared.js` | Helpers shared by the app and the extension |
 | `manifest.json`, `background.js` | The Chrome extension (site blocker, badge, opens on startup) |
+| `app.webmanifest`, `sw.js` | Phone install + offline support |

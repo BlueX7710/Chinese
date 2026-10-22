@@ -10,6 +10,9 @@
   const $app = document.getElementById('app');
   const params = new URLSearchParams(location.search);
   const fromUrl = params.get('from');
+  // Set by the iPhone Shortcuts automation (see README) so we can hand control back to it.
+  const iosGate = params.get('gate') === 'ios';
+  const UNLOCK_SHORTCUT = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Hanzi Unlock');
 
   let state;
   let session = null; // active lesson, or null on the home/settings screens
@@ -344,6 +347,7 @@
   }
 
   function continueLink() {
+    if (iosGate) return `<a class="btn primary" href="${UNLOCK_SHORTCUT}">Unlock my apps for today</a>`;
     if (!fromUrl) return '';
     let host = fromUrl;
     try {
@@ -404,6 +408,7 @@
       if (r.fresh) parts.push(`<b>${r.fresh}</b> new word${r.fresh === 1 ? '' : 's'}`);
       main = `
         <section class="card owe">
+          ${iosGate ? '<p class="blocked">Your apps are locked until you finish today\'s Chinese.</p>' : ''}
           ${fromUrl ? `<p class="blocked">Blocked. You don't get <b>${esc(safeHost(fromUrl))}</b> until you finish today's Chinese.</p>` : ''}
           ${lost ? `<p class="shame">Your ${lost}-day streak is dead. Start a new one.</p>` : ''}
           <h1>You owe today's lesson.</h1>
@@ -456,7 +461,7 @@
         <div class="hanzi">${w.h}</div>
         <div class="meaning">${esc(w.m)}</div>
         <form data-form="pinyin" class="pin">
-          <input id="pin" autocomplete="off" autocapitalize="off" spellcheck="false"
+          <input id="pin" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
             placeholder="e.g. ni3 hao3" ${a ? 'disabled' : ''} value="${a ? esc(a.given) : ''}">
           ${a ? '' : '<button class="btn primary">Check</button>'}
         </form>
@@ -647,6 +652,10 @@
         render();
       }
     });
+  }
+
+  if (!IS_EXT && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
   load().then(render);
