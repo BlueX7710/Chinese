@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "汉字 Every Day",
+  "version": "1.0.0",
+  "description": "Blocks distracting sites until you finish today's Chinese lesson.",
+  "permissions": ["storage", "webNavigation", "alarms"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Today's Chinese lesson" },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}
