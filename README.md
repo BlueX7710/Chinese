@@ -43,7 +43,7 @@ Open `index.html` in any browser. You get the lessons and streaks, but no site b
 
 ### On your phone (iPhone or Android)
 
-The app installs to your home screen and works offline. It needs to be hosted at a web address first (see **Hosting** below).
+The app installs to your home screen and works offline. Open **https://bluex7710.github.io/Chinese/** on your phone, then:
 
 - **iPhone:** open the link in Safari → Share → **Add to Home Screen**.
 - **Android:** open the link in Chrome → ⋮ menu → **Install app** (or **Add to Home screen**).
@@ -60,9 +60,9 @@ A web app can't block other apps by itself, but iPhone's built-in **Shortcuts** 
 2. **Create the gate shortcut.** New shortcut named `Hanzi Gate`:
    - **Get File** `Shortcuts/hanzi-done.txt` (turn off "Error If Not Found")
    - **Current Date** → **Format Date** (`yyyy-MM-dd`)
-   - **If** *File* **is not** *Formatted Date* → **Open URLs** `https://YOUR-SITE/index.html?gate=ios` → **End If**
+   - **If** *File* **is not** *Formatted Date* → **Open URLs** `https://bluex7710.github.io/Chinese/index.html?gate=ios` → **End If**
 3. **Trigger it.** Automation tab → **+** → **App** → choose Instagram, TikTok, YouTube etc. → **Is Opened** → **Run Immediately** → action: **Run Shortcut** `Hanzi Gate`.
-4. **(Optional) Daily nag.** Another automation → **Time of Day** (e.g. 7 pm) → **Open URLs** `https://YOUR-SITE/index.html?gate=ios`.
+4. **(Optional) Daily nag.** Another automation → **Time of Day** (e.g. 7 pm) → **Open URLs** `https://bluex7710.github.io/Chinese/index.html?gate=ios`.
 
 Now opening a locked app throws you into the lesson. When you finish, tap **Unlock my apps for today**. That runs `Hanzi Unlock`, and the locked apps open normally until midnight.
 
