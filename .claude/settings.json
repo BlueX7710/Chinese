@@ -1,0 +1,13 @@
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"
+  },
+  "extraKnownMarketplaces": {
+    "effortless": {
+      "source": { "source": "github", "repo": "HeyCubit/effortless" }
+    }
+  },
+  "enabledPlugins": {
+    "effortless@effortless": true
+  }
+}
