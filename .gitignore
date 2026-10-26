@@ -1,0 +1,13 @@
+# Built app (published as a GitHub Release instead)
+*.apk
+
+# Android build output and signing keys
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+*.keystore
+
+# Local tooling
+.claude/*
+!.claude/skills/

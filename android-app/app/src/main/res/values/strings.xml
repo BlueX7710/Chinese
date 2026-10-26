@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">汉字 Every Day</string>
+    <string name="blocker_description">Sends you to your Chinese lesson when you open an app you chose to block, until today\'s lesson is done. It only looks at which app is opening; it does not read anything on your screen.</string>
+</resources>

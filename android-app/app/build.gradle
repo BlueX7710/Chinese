@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.bluex7710.hanzi'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.bluex7710.hanzi'
+        minSdk 26
+        targetSdk 34
+        // CI run number, so every build installs as an update over the last one.
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger())
+        versionName "1.0.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+
+    // The release key comes from GitHub Actions secrets (see .github/workflows/android.yml),
+    // never from the repo. A stable key lets each new APK install over the old one and keep progress.
+    def keystorePath = System.getenv('HANZI_KEYSTORE')
+    signingConfigs {
+        if (keystorePath) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv('HANZI_KEYSTORE_PASSWORD')
+                keyAlias 'hanzi'
+                keyPassword System.getenv('HANZI_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Without the secret, fall back to a throwaway debug key so the build still installs.
+            signingConfig keystorePath ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.assets.srcDirs += "$buildDir/generated/web"
+    }
+}
+
+// The lessons are the same web app as the site: copy it in from docs/ at build time.
+def copyWeb = tasks.register('copyWeb', Copy) {
+    from(rootProject.file('../docs')) {
+        include 'index.html', 'app.js', 'shared.js', 'words.js', 'styles.css', 'icon-*.png'
+    }
+    into "$buildDir/generated/web/www"
+}
+preBuild.dependsOn copyWeb
