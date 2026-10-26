@@ -181,3 +181,17 @@ footer { text-align: center; margin-top: 32px; }
   .opt-btn kbd { display: none; }
 }
 #app { padding-top: env(safe-area-inset-top); padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+
+/* How common a word is */
+.freq { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-top: 4px; letter-spacing: 0.02em; }
+.freq.f3 { background: var(--good-bg); color: var(--good); }
+.freq.f2 { background: var(--line); color: var(--text); }
+.freq.f1 { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.note { font-size: 14px; color: var(--text) !important; background: var(--bg); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 6px; text-align: left; margin: 12px 0 16px !important; }
+.lesson .note { max-width: 420px; margin-left: auto !important; margin-right: auto !important; }
+
+/* Placement test */
+.card.offer { margin-bottom: 16px; }
+.card.offer h2 { text-align: center; }
+.opt-btn.idk { color: var(--muted); border-style: dashed; }
+.hanzi-inline { font-family: var(--hanzi); font-size: 20px; color: var(--text); }

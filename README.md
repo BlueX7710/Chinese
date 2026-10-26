@@ -16,6 +16,10 @@ An app that **forces** you to learn Chinese. You get your distracting websites b
 
 All 150 HSK 1 words, taught in a sensible beginner order, with spaced repetition. Words you know well come back less often; words you miss come back tomorrow.
 
+**Placement test.** On first launch you can take a 2-minute test (or say you're a total beginner). It checks a couple of words from each step of the list and gets harder as it goes, stopping when you hit your level. Words you know skip the beginner lessons, but come back in reviews over the next week to make sure. You can retake it in Settings; it only ever adds words.
+
+**How common is each word?** Every word shows a label: ●●● *Very common*, ●●○ *Common* or ●○○ *Less common*. Labels are based on how often the word appears in Chinese film and TV subtitles ([OpenSubtitles frequency list](https://github.com/hermitdave/FrequencyWords)), so they reflect everyday spoken Chinese. Some words also get a usage note when the textbook word isn't what people actually say, e.g. 汉语 → people usually say 中文.
+
 Exercise types:
 - New word card (characters, pinyin, meaning, audio)
 - Characters → meaning (multiple choice)

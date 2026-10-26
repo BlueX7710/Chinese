@@ -6,6 +6,13 @@
   const IS_EXT = typeof chrome !== 'undefined' && !!(chrome.storage && chrome.storage.local);
   const MIN_NEW_PER_DAY = 3;
   const GIVE_UP_PHRASE = '我放弃';
+  const TEST_BLOCK = 15; // placement test samples this many words per difficulty step
+  const TEST_PER_BLOCK = 2;
+  const FREQ = {
+    3: { label: 'Very common', dots: '●●●' },
+    2: { label: 'Common', dots: '●●○' },
+    1: { label: 'Less common', dots: '●○○' },
+  };
 
   const $app = document.getElementById('app');
   const params = new URLSearchParams(location.search);
@@ -16,6 +23,8 @@
 
   let state;
   let session = null; // active lesson, or null on the home/settings screens
+  let test = null; // active placement test
+  let testResult = null;
   let view = 'home';
   let lastSummary = null;
 
@@ -37,6 +46,7 @@
       newToday: { date: '', count: 0 },
       settings: { newPerDay: 5, blocklist: [...DEFAULT_BLOCKLIST] },
       stats: { answered: 0, correct: 0 },
+      placement: null, // set once the placement test is taken or skipped
     };
   }
 
@@ -328,10 +338,70 @@
     render();
   }
 
+  // ---------- placement test ----------
+
+  // Words are ordered easiest-first, so we test a couple from each block of the list.
+  // Both right → the whole block counts as known. Two blocks in a row with nothing
+  // right → stop, you've found your level.
+  function startTest() {
+    const blocks = [];
+    for (let i = 0; i < WORDS.length; i += TEST_BLOCK) {
+      blocks.push(shuffle(WORDS.slice(i, i + TEST_BLOCK).map((w) => w.h)).slice(0, TEST_PER_BLOCK));
+    }
+    test = { blocks, block: 0, q: 0, right: [], misses: 0, known: new Set(), asked: 0, current: null };
+    nextTestQuestion();
+  }
+
+  function nextTestQuestion() {
+    const id = test.blocks[test.block][test.q];
+    test.current = { id, options: buildOptions(id, 'meaning') };
+    render();
+  }
+
+  function testAnswer(givenId) {
+    const id = test.current.id;
+    test.asked++;
+    if (givenId === id) test.right.push(id);
+    test.q++;
+    const block = test.blocks[test.block];
+    if (test.q < block.length) return nextTestQuestion();
+
+    if (test.right.length === block.length) {
+      const start = test.block * TEST_BLOCK;
+      WORDS.slice(start, start + TEST_BLOCK).forEach((w) => test.known.add(w.h));
+    } else {
+      test.right.forEach((h) => test.known.add(h));
+    }
+    test.misses = test.right.length ? 0 : test.misses + 1;
+    test.block++;
+    test.q = 0;
+    test.right = [];
+    if (test.misses >= 2 || test.block >= test.blocks.length) return finishTest();
+    nextTestQuestion();
+  }
+
+  function finishTest() {
+    let added = 0;
+    for (const id of test.known) {
+      if (state.cards[id]) continue;
+      // Count it as learned, but due back within a week so reviews confirm it.
+      state.cards[id] = { interval: 3, ease: 2.5, due: addDays(today(), 1 + Math.floor(Math.random() * 7)), reps: 1, lapses: 0 };
+      added++;
+    }
+    state.placement = { date: today(), known: test.known.size };
+    save();
+    testResult = { known: test.known.size, added, asked: test.asked, nextWord: unlearnedIds()[0] };
+    test = null;
+    view = 'testResult';
+    render();
+  }
+
   // ---------- rendering ----------
 
   function render() {
     if (session) return renderSession();
+    if (test) return renderTest();
+    if (view === 'testResult') return renderTestResult();
     if (view === 'settings') return renderSettings();
     if (view === 'summary') return renderSummary();
     renderHome();
@@ -416,7 +486,17 @@
           <button class="btn primary" data-action="start">Start lesson</button>
         </section>`;
     }
-    $app.innerHTML = `${header()}<main>${main}${statsBlock()}</main>
+    const offer = state.placement
+      ? ''
+      : `<section class="card offer">
+          <h2>Know some Chinese already?</h2>
+          <p>Take a 2-minute placement test and skip the words you know.</p>
+          <div class="row">
+            <button class="btn primary" data-action="test">Take the test</button>
+            <button class="btn ghost" data-action="skipTest">I'm a total beginner</button>
+          </div>
+        </section>`;
+    $app.innerHTML = `${header()}<main>${offer}${main}${statsBlock()}</main>
       <footer><button class="link" data-action="settings">Settings</button></footer>`;
   }
 
@@ -428,6 +508,15 @@
     }
   }
 
+  function freqBadge(w) {
+    const f = FREQ[w.f] || FREQ[1];
+    return `<span class="freq f${w.f}" title="How often this word is used in everyday Chinese">${f.dots} ${f.label}</span>`;
+  }
+
+  function usageNote(w) {
+    return w.n ? `<p class="note">${esc(w.n)}</p>` : '';
+  }
+
   function wordReveal(w) {
     return `
       <div class="reveal">
@@ -435,9 +524,11 @@
         <div>
           <div class="pinyin">${esc(w.p)}</div>
           <div class="meaning">${esc(w.m)}</div>
+          ${freqBadge(w)}
         </div>
         ${canSpeak() ? `<button class="icon" data-action="speak" data-text="${esc(w.h)}" aria-label="Play">🔊</button>` : ''}
-      </div>`;
+      </div>
+      ${usageNote(w)}`;
   }
 
   function renderSession() {
@@ -453,6 +544,8 @@
         <div class="hanzi">${w.h}</div>
         <div class="pinyin lg">${esc(w.p)}</div>
         <div class="meaning lg">${esc(w.m)}</div>
+        <div>${freqBadge(w)}</div>
+        ${usageNote(w)}
         ${canSpeak() ? `<button class="btn ghost" data-action="speak" data-text="${esc(w.h)}">🔊 Hear it</button>` : ''}
         <button class="btn primary" data-action="next">Got it</button>`;
     } else if (type === 'pinyin') {
@@ -507,6 +600,46 @@
     if (cont) cont.focus();
   }
 
+  function renderTest() {
+    const { id, options } = test.current;
+    const w = BY_ID[id];
+    const totalQ = test.blocks.length * TEST_PER_BLOCK;
+    const pct = Math.round((100 * (test.block * TEST_PER_BLOCK + test.q)) / totalQ);
+    const opts = options
+      .map(
+        (o, i) => `<button class="opt-btn" data-action="testChoose" data-id="${esc(o.h)}"><kbd>${i + 1}</kbd>${esc(o.m)}</button>`
+      )
+      .join('');
+    $app.innerHTML = `
+      ${header()}
+      <div class="progress"><div style="width:${pct}%"></div></div>
+      <main class="lesson">
+        <p class="label">Placement test · don't guess</p>
+        <div class="hanzi">${w.h}</div>
+        <div class="opts">${opts}
+          <button class="opt-btn idk" data-action="testChoose" data-id=""><kbd>5</kbd>I don't know</button>
+        </div>
+        <p class="hint">The test gets harder as you go and stops when you reach your level.</p>
+      </main>`;
+  }
+
+  function renderTestResult() {
+    const r = testResult;
+    const next = r.nextWord ? BY_ID[r.nextWord] : null;
+    $app.innerHTML = `${header()}<main>
+      <section class="card ok">
+        <div class="big">${r.known ? '🎯' : '🌱'}</div>
+        <h1>${r.known ? `You already know about ${r.known} words` : 'Starting from the beginning'}</h1>
+        <p>${
+          r.known
+            ? `${r.added} of them were added to your reviews. They'll come back over the next week to confirm you really know them.`
+            : 'No problem. Everyone starts somewhere. Your first lesson begins with the basics.'
+        }</p>
+        ${next ? `<p>Your new words start at <b class="hanzi-inline">${next.h}</b> (${esc(next.m)}).</p>` : ''}
+        <button class="btn primary" data-action="home">Go to today's lesson</button>
+      </section></main>`;
+  }
+
   function renderSummary() {
     const s = lastSummary;
     const done = isDoneToday(state);
@@ -546,6 +679,10 @@
           <button class="btn primary">Save</button>
         </form>
         <hr>
+        <h2>Placement test</h2>
+        <p>${state.placement && state.placement.date ? `Last taken ${state.placement.date}. ` : ''}Retaking only adds words you know. It never removes progress.</p>
+        <button class="btn ghost" data-action="test">${state.placement && state.placement.date ? 'Retake' : 'Take'} the placement test</button>
+        <hr>
         <h2>Pronunciation</h2>
         <p>${canSpeak() ? `Using voice: ${esc(zhVoice.name)}` : 'No Chinese voice found on this device, so listening exercises are off. Install a Chinese (zh-CN) text-to-speech voice in your OS settings.'}</p>
         ${canSpeak() ? '<button class="btn ghost" data-action="speak" data-text="你好，我们开始学习汉语吧">🔊 Test voice</button>' : ''}
@@ -571,6 +708,15 @@
       render();
     },
     start: startDaily,
+    test: startTest,
+    skipTest() {
+      state.placement = { skipped: true };
+      save();
+      render();
+    },
+    testChoose(el) {
+      if (test) testAnswer(el.dataset.id);
+    },
     practice: startPractice,
     next,
     speak(el) {
@@ -626,6 +772,11 @@
   });
 
   document.addEventListener('keydown', (e) => {
+    if (test && /^[1-5]$/.test(e.key)) {
+      const btn = $app.querySelectorAll('[data-action="testChoose"]')[Number(e.key) - 1];
+      if (btn) btn.click();
+      return;
+    }
     if (!session) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (!session.answer && /^[1-4]$/.test(e.key) && tag !== 'INPUT') {
