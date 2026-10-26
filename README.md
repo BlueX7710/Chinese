@@ -1,118 +1,55 @@
 # 汉字 Every Day
 
-An app that **forces** you to learn Chinese. You get your distracting websites back only after you finish today's lesson.
+A Chinese app that makes you learn: your distracting apps and websites stay blocked until you've done today's lesson.
 
-## How it forces you
+**Open it:** https://bluex7710.github.io/Chinese/
 
-- **Site blocker (Chrome extension).** YouTube, Reddit, X, Instagram, TikTok, Netflix and others redirect to your lesson until it's done for the day.
-- **Opens itself.** Every time the browser starts and the lesson isn't done, the lesson is the first tab you see. The toolbar icon shows a red `!` until you finish.
-- **No skipping.** There's no skip button. A wrong answer brings the word back a few cards later, in a different exercise, until you get it right.
-- **The blocklist is locked** until you've finished today's lesson, so you can't remove YouTube when you're feeling weak.
-- **Minimum 3 new words a day.** You can't set it to zero.
-- **Streak shaming.** Miss a day and the home screen tells you your streak is dead.
-- **Giving up takes effort.** To reset your progress you have to type 我放弃 ("I give up") in Chinese.
+## What it does
 
-## What you learn
+- **Daily lesson you can't skip**: new words plus spaced-repetition reviews of old ones (5 new words a day by default, never fewer than 3). There's no skip button: get a word wrong and it comes back a few cards later, in a different exercise, until you get it right.
+- **Exercises**: a new-word card (characters, pinyin, meaning and audio), characters → meaning, meaning → characters, listening (hear it, pick the characters) and typing the pinyin with tones (`ni3 hao3`; tones count). Keys `1`–`4` answer and `Enter` continues.
+- **Blocking**: the **Android app** sends Instagram, TikTok, YouTube or any app you pick to your lesson until it's done, then a button takes you back. The **Chrome extension** does the same for websites. On **iPhone**, a Shortcuts automation does it (see below). The block list can only be changed after that day's lesson.
+- **Placement test**: on first launch, a 2-minute test (or "I'm a total beginner"). It asks two words from each block of 15, gets harder as it goes and stops at your level. Words you know skip the beginner lessons but come back in reviews over the next week to make sure. Retake it any time in Settings; it only ever adds words.
+- **How common each word is**: every word shows ●●● *Very common*, ●●○ *Common* or ●○○ *Less common*, from how often it appears in Chinese film and TV subtitles ([OpenSubtitles frequency list](https://github.com/hermitdave/FrequencyWords)). 23 words also have a usage note when the textbook word isn't what people say, e.g. 汉语 → people usually say 中文.
+- **Vocabulary**: all 150 HSK 1 words, in a beginner-friendly order.
+- **Streaks**: a day streak, a 4-week calendar, and a message telling you your streak is dead when you miss a day. The Android app also sends a 7 pm reminder.
+- **Giving up takes effort**: resetting your progress means typing 我放弃 ("I give up") in Chinese.
 
-All 150 HSK 1 words, taught in a sensible beginner order, with spaced repetition. Words you know well come back less often; words you miss come back tomorrow.
-
-**Placement test.** On first launch you can take a 2-minute test (or say you're a total beginner). It checks a couple of words from each step of the list and gets harder as it goes, stopping when you hit your level. Words you know skip the beginner lessons, but come back in reviews over the next week to make sure. You can retake it in Settings; it only ever adds words.
-
-**How common is each word?** Every word shows a label: ●●● *Very common*, ●●○ *Common* or ●○○ *Less common*. Labels are based on how often the word appears in Chinese film and TV subtitles ([OpenSubtitles frequency list](https://github.com/hermitdave/FrequencyWords)), so they reflect everyday spoken Chinese. Some words also get a usage note when the textbook word isn't what people actually say, e.g. 汉语 → people usually say 中文.
-
-Exercise types:
-- New word card (characters, pinyin, meaning, audio)
-- Characters → meaning (multiple choice)
-- Meaning → characters (multiple choice)
-- Listening: hear it, pick the characters (needs a Chinese text-to-speech voice on your device)
-- Type the pinyin with tones, e.g. `ni3 hao3` (tones count)
-
-Keyboard: `1`–`4` to answer multiple choice, `Enter` to continue.
+Progress is stored only on your own device, separately for each app and browser.
 
 ## Install
 
-### As a Chrome extension (recommended — this is what does the forcing)
+- **Android app**: download `Hanzi-Every-Day.apk` from [Releases](../../releases/latest), open it on your phone and allow the install (Play Protect may warn you: **More details → Install anyway**). Then open the app and tap **Turn on app blocker**. If Android says **"Restricted setting"**, tap the link under the button for the steps (Settings → Apps → 汉字 Every Day → ⋮ → **Allow restricted settings**). To update, install the newest APK over the old one; uninstalling deletes your progress.
+- **Any phone or computer**: open the link above. Then use **Install app** (Chrome, Edge, Android) or **Share → Add to Home Screen** (iPhone/iPad Safari).
+- **Chrome extension** (blocks websites): download this repo, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the `docs` folder.
 
-1. Download this repo (Code → Download ZIP, then unzip), or `git clone` it.
-2. Open `chrome://extensions` in Chrome, Edge, Brave or Arc.
-3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and pick this folder.
-5. The lesson opens right away. Click the red 汉 icon in the toolbar to open it any time.
+### Making an iPhone block apps (optional, ~5 minutes)
 
-Edit the blocked sites in **Settings** (after finishing that day's lesson).
+A web app can't block other apps, but the iPhone's **Shortcuts** app can. Do your lessons in **Safari** for this, because Safari and the home-screen app keep separate progress.
 
-### As a plain web page
+1. **Unlock shortcut.** Shortcuts → **+** → name it exactly `Hanzi Unlock`. Add **Current Date** → **Format Date** (custom format `yyyy-MM-dd`) → **Save File** to `Shortcuts/hanzi-done.txt` (**Overwrite If File Exists** on, **Ask Where to Save** off).
+2. **Gate shortcut.** A new shortcut named `Hanzi Gate`: **Get File** `Shortcuts/hanzi-done.txt` ("Error If Not Found" off) → **Current Date** → **Format Date** (`yyyy-MM-dd`) → **If** *File* **is not** *Formatted Date* → **Open URLs** `https://bluex7710.github.io/Chinese/index.html?gate=ios` → **End If**.
+3. **Trigger.** Automation → **+** → **App** → pick Instagram, TikTok, YouTube etc. → **Is Opened** → **Run Immediately** → **Run Shortcut** `Hanzi Gate`.
+4. **Daily nag (optional).** Automation → **Time of Day** (e.g. 7 pm) → **Open URLs** with the same link.
 
-Open `index.html` in any browser. You get the lessons and streaks, but no site blocking. Progress is stored in that browser's local storage.
+Opening a locked app now sends you to the lesson. When you finish, tap **Unlock my apps for today** and they open normally until midnight.
 
-### Android app (recommended on Android — this one can block apps)
+## Repository layout
 
-A real Android app with the same lessons, plus:
-- **App blocker:** opening Instagram, TikTok, YouTube or any app you pick sends you straight to your lesson until today's is done. When you finish, a button takes you back to the app you were trying to open.
-- **7 pm reminder** notification if you haven't done today's lesson.
-- **Chinese pronunciation** through Android's built-in voice.
+| Folder | What's in it |
+| --- | --- |
+| `docs/` | The web app, served by GitHub Pages: `index.html`, `app.js`, `words.js` (the vocabulary), `styles.css`, the manifest, offline service worker and icons. It's also the Chrome extension (`manifest.json`, `background.js`). |
+| `android-app/` | The Android app: a WebView around `docs/` (copied in at build time) plus the app blocker, reminder and Chinese voice in Java. |
+| `.github/workflows/` | `android.yml` builds the APK on every push to `main` and publishes it to Releases. |
+| `tools/` | `smoke.js` tests the app in a browser (lesson, placement test, phone layout and the Android flow). |
+| `.claude/skills/effortless/` | The `/effortless` Claude Code skill: test, commit, push and ship in one go. |
 
-**Install:**
-1. On your phone, open **https://github.com/BlueX7710/Chinese/releases/latest/download/hanzi-every-day.apk**
-2. Open the downloaded file. If Android asks, allow your browser to **install unknown apps**, then tap **Install**. (It's not from the Play Store, so Play Protect may warn you. Tap **More details → Install anyway**.)
-3. Open **汉字 Every Day** and tap **Turn on app blocker**. Find 汉字 Every Day in the list and switch it on.
-   - If Android says **"Restricted setting"**: open Settings → Apps → 汉字 Every Day → ⋮ (top right) → **Allow restricted settings**, then try again. Android does this for every app installed outside the Play Store.
-4. Pick which apps to block in **Settings** (editable only after that day's lesson is done).
+## Building the Android app
 
-**Updating:** install the newest APK from the same link over the old one. Your progress is kept. Uninstalling the app deletes your progress.
+GitHub Actions builds it on every push to `main`. To build locally you need JDK 17, Gradle 8.9 and the Android SDK (platform 34):
 
-**Signing (one-time, for whoever owns the repo):** add two repository secrets under Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_B64` (the signing keystore, base64-encoded) and `ANDROID_KEYSTORE_PASSWORD`. Without them each build gets a throwaway key, and a new build can't install over an old one. The key is never stored in the repo.
+```bash
+gradle -p android-app assembleRelease   # output: android-app/app/build/outputs/apk/release/app-release.apk
+```
 
-How it's built: `android/` wraps the same web files in a WebView. A GitHub Action builds the APK on every push and publishes it to the link above. The blocker is an Android accessibility service. It only looks at *which app* is opening and never reads what's on your screen. You can still get around it by switching the blocker off in Android settings, so don't.
-
-### On your phone as a web app (iPhone or Android)
-
-The app installs to your home screen and works offline. Open **https://bluex7710.github.io/Chinese/** on your phone, then:
-
-- **iPhone:** open the link in Safari → Share → **Add to Home Screen**.
-- **Android:** open the link in Chrome → ⋮ menu → **Install app** (or **Add to Home screen**).
-
-Your progress is stored on each device separately, so your phone and computer each keep their own streak.
-
-#### Making your iPhone force you too (optional, ~5 minutes)
-
-A web app can't block other apps by itself, but iPhone's built-in **Shortcuts** app can. Do your lessons in **Safari** for this (on iPhone, Safari and home-screen apps keep separate progress).
-
-1. **Create the unlock shortcut.** Shortcuts → **+** → name it exactly `Hanzi Unlock`. Add these actions:
-   - **Current Date** → **Format Date** (Custom format: `yyyy-MM-dd`)
-   - **Save File** → save the formatted date to `Shortcuts/hanzi-done.txt`, with **Overwrite If File Exists** on and **Ask Where to Save** off.
-2. **Create the gate shortcut.** New shortcut named `Hanzi Gate`:
-   - **Get File** `Shortcuts/hanzi-done.txt` (turn off "Error If Not Found")
-   - **Current Date** → **Format Date** (`yyyy-MM-dd`)
-   - **If** *File* **is not** *Formatted Date* → **Open URLs** `https://bluex7710.github.io/Chinese/index.html?gate=ios` → **End If**
-3. **Trigger it.** Automation tab → **+** → **App** → choose Instagram, TikTok, YouTube etc. → **Is Opened** → **Run Immediately** → action: **Run Shortcut** `Hanzi Gate`.
-4. **(Optional) Daily nag.** Another automation → **Time of Day** (e.g. 7 pm) → **Open URLs** `https://bluex7710.github.io/Chinese/index.html?gate=ios`.
-
-Now opening a locked app throws you into the lesson. When you finish, tap **Unlock my apps for today**. That runs `Hanzi Unlock`, and the locked apps open normally until midnight.
-
-On **Android**, use the Android app above instead; it blocks apps on its own.
-
-## Hosting
-
-The app is plain static files, so any static host works:
-- **GitHub Pages:** repo Settings → Pages → Source: *Deploy from a branch* → pick the branch and `/ (root)`. Your link will be `https://<username>.github.io/<repo>/`. (Free for public repos.)
-- **Netlify:** drag this folder onto https://app.netlify.com/drop.
-
-## Audio
-
-Pronunciation uses your system's text-to-speech. If you hear nothing, install a Chinese (zh-CN) voice:
-- **Windows:** Settings → Time & language → Speech → Add voices → Chinese (Simplified)
-- **macOS:** System Settings → Accessibility → Spoken Content → System voice → Manage voices → Chinese
-- **Android/iOS:** usually already installed
-
-## Files
-
-| File | What it is |
-|---|---|
-| `index.html`, `app.js`, `styles.css` | The lesson app |
-| `words.js` | HSK 1 vocabulary — add more words here |
-| `shared.js` | Helpers shared by the app and the extension |
-| `manifest.json`, `background.js` | The Chrome extension (site blocker, badge, opens on startup) |
-| `app.webmanifest`, `sw.js` | Phone install + offline support |
-| `android/` | Android app: WebView wrapper, app blocker, reminder |
-| `.github/workflows/android.yml` | Builds the APK and publishes it as a release |
+Builds are signed with the key in the `ANDROID_KEYSTORE_B64` and `ANDROID_KEYSTORE_PASSWORD` repository secrets, so each new APK installs over the last one. Without them the build uses a throwaway key. The key is never stored in the repo.

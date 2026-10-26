@@ -2,7 +2,7 @@ name: Android app
 
 on:
   push:
-    branches: [main, ccr-38fbbd2a-h6ad4p]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -37,25 +37,25 @@ jobs:
       - name: Build APK
         env:
           HANZI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: gradle -p android assembleRelease --no-daemon
+        run: gradle -p android-app assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk hanzi-every-day.apk
+        run: cp android-app/app/build/outputs/apk/release/app-release.apk Hanzi-Every-Day.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: hanzi-every-day-apk
-          path: hanzi-every-day.apk
+          name: Hanzi-Every-Day-apk
+          path: Hanzi-Every-Day.apk
 
       # Keeps one always-current download link:
-      # https://github.com/<owner>/<repo>/releases/latest/download/hanzi-every-day.apk
+      # https://github.com/<owner>/<repo>/releases/latest/download/Hanzi-Every-Day.apk
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
           name: Android app
           body: |
-            Download **hanzi-every-day.apk** below on your Android phone and open it to install.
+            Download **Hanzi-Every-Day.apk** below on your Android phone and open it to install.
             Built from ${{ github.sha }}.
-          files: hanzi-every-day.apk
+          files: Hanzi-Every-Day.apk
           make_latest: true

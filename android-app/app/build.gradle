@@ -47,10 +47,10 @@ android {
     }
 }
 
-// The lessons are the same web app as the site: copy it in from the repo root at build time.
+// The lessons are the same web app as the site: copy it in from docs/ at build time.
 def copyWeb = tasks.register('copyWeb', Copy) {
-    from(rootProject.file('..')) {
-        include 'index.html', 'app.js', 'shared.js', 'words.js', 'styles.css', 'icons/**'
+    from(rootProject.file('../docs')) {
+        include 'index.html', 'app.js', 'shared.js', 'words.js', 'styles.css', 'icon-*.png'
     }
     into "$buildDir/generated/web/www"
 }

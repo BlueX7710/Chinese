@@ -1,6 +1,6 @@
 // Offline support for the installed phone app. Serves cached files instantly and
 // refreshes them in the background, so updates show up on the next launch.
-const CACHE = 'hanzi-v3';
+const CACHE = 'hanzi-v4';
 const FILES = [
   './',
   './index.html',
@@ -8,10 +8,10 @@ const FILES = [
   './shared.js',
   './words.js',
   './styles.css',
-  './app.webmanifest',
-  './icons/icon192.png',
-  './icons/icon512.png',
-  './icons/apple-touch-icon.png',
+  './manifest.webmanifest',
+  './icon-192.png',
+  './icon-512.png',
+  './apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (e) => {
