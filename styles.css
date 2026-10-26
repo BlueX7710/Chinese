@@ -195,3 +195,15 @@ footer { text-align: center; margin-top: 32px; }
 .card.offer h2 { text-align: center; }
 .opt-btn.idk { color: var(--muted); border-style: dashed; }
 .hanzi-inline { font-family: var(--hanzi); font-size: 20px; color: var(--text); }
+
+/* Android app */
+.card.warn { border: 2px solid var(--accent); margin-bottom: 16px; }
+.card.warn h2 { text-align: center; }
+.card.warn .link { display: block; margin: 12px auto 0; font-size: 14px; }
+.apps { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.apps legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
+.apps:disabled { opacity: 0.5; }
+.app-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.app { display: flex !important; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 400 !important; border-bottom: 1px solid var(--line); }
+.app:last-child { border-bottom: 0; }
+.app input { width: 20px; height: 20px; accent-color: var(--accent); }

@@ -1,0 +1,61 @@
+name: Android app
+
+on:
+  push:
+    branches: [main, ccr-38fbbd2a-h6ad4p]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Load signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hanzi.keystore"
+            echo "HANZI_KEYSTORE=$RUNNER_TEMP/hanzi.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 secret not set. Using a temporary key: this APK can't update an installed copy without uninstalling it first."
+          fi
+
+      - name: Build APK
+        env:
+          HANZI_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: gradle -p android assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk hanzi-every-day.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanzi-every-day-apk
+          path: hanzi-every-day.apk
+
+      # Keeps one always-current download link:
+      # https://github.com/<owner>/<repo>/releases/latest/download/hanzi-every-day.apk
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: Android app
+          body: |
+            Download **hanzi-every-day.apk** below on your Android phone and open it to install.
+            Built from ${{ github.sha }}.
+          files: hanzi-every-day.apk
+          make_latest: true

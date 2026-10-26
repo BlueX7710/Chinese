@@ -4,6 +4,8 @@
   const WORDS = window.WORDS;
   const BY_ID = Object.fromEntries(WORDS.map((w) => [w.h, w]));
   const IS_EXT = typeof chrome !== 'undefined' && !!(chrome.storage && chrome.storage.local);
+  // Set when running inside the Android app (see android/). Provides speech and app blocking.
+  const NATIVE = window.HanziNative || null;
   const MIN_NEW_PER_DAY = 3;
   const GIVE_UP_PHRASE = '我放弃';
   const TEST_BLOCK = 15; // placement test samples this many words per difficulty step
@@ -19,6 +21,8 @@
   const fromUrl = params.get('from');
   // Set by the iPhone Shortcuts automation (see README) so we can hand control back to it.
   const iosGate = params.get('gate') === 'ios';
+  // Android: the app you tried to open when the blocker sent you here.
+  let blockedApp = params.get('app') ? { pkg: params.get('app'), name: params.get('appName') || params.get('app') } : null;
   const UNLOCK_SHORTCUT = 'shortcuts://run-shortcut?name=' + encodeURIComponent('Hanzi Unlock');
 
   let state;
@@ -139,10 +143,12 @@
     speechSynthesis.addEventListener('voiceschanged', findVoice);
   }
 
-  const canSpeak = () => !!zhVoice;
+  const canSpeak = () => (NATIVE ? NATIVE.hasVoice() : !!zhVoice);
+  const voiceName = () => (NATIVE ? 'Android text-to-speech (Chinese)' : zhVoice.name);
 
   function speak(text) {
     if (!canSpeak()) return;
+    if (NATIVE) return NATIVE.speak(text);
     const u = new SpeechSynthesisUtterance(text);
     u.voice = zhVoice;
     u.lang = zhVoice.lang;
@@ -399,6 +405,7 @@
   // ---------- rendering ----------
 
   function render() {
+    if (NATIVE && isDoneToday(state)) NATIVE.lessonDone(today());
     if (session) return renderSession();
     if (test) return renderTest();
     if (view === 'testResult') return renderTestResult();
@@ -417,6 +424,7 @@
   }
 
   function continueLink() {
+    if (blockedApp) return `<button class="btn primary" data-action="openApp">Continue to ${esc(blockedApp.name)} →</button>`;
     if (iosGate) return `<a class="btn primary" href="${UNLOCK_SHORTCUT}">Unlock my apps for today</a>`;
     if (!fromUrl) return '';
     let host = fromUrl;
@@ -479,6 +487,7 @@
       main = `
         <section class="card owe">
           ${iosGate ? '<p class="blocked">Your apps are locked until you finish today\'s Chinese.</p>' : ''}
+          ${blockedApp ? `<p class="blocked">Blocked. You don't get <b>${esc(blockedApp.name)}</b> until you finish today's Chinese.</p>` : ''}
           ${fromUrl ? `<p class="blocked">Blocked. You don't get <b>${esc(safeHost(fromUrl))}</b> until you finish today's Chinese.</p>` : ''}
           ${lost ? `<p class="shame">Your ${lost}-day streak is dead. Start a new one.</p>` : ''}
           <h1>You owe today's lesson.</h1>
@@ -486,6 +495,15 @@
           <button class="btn primary" data-action="start">Start lesson</button>
         </section>`;
     }
+    const blockerOff =
+      NATIVE && !NATIVE.isBlockerOn()
+        ? `<section class="card warn">
+            <h2>The app blocker is off</h2>
+            <p>Turn it on so Instagram, TikTok, YouTube and friends send you here until your lesson is done.</p>
+            <button class="btn primary" data-action="blockerSettings">Turn on app blocker</button>
+            <button class="link" data-action="blockerHelp">It says "restricted setting"?</button>
+          </section>`
+        : '';
     const offer = state.placement
       ? ''
       : `<section class="card offer">
@@ -496,7 +514,7 @@
             <button class="btn ghost" data-action="skipTest">I'm a total beginner</button>
           </div>
         </section>`;
-    $app.innerHTML = `${header()}<main>${offer}${main}${statsBlock()}</main>
+    $app.innerHTML = `${header()}<main>${blockerOff}${offer}${main}${statsBlock()}</main>
       <footer><button class="link" data-action="settings">Settings</button></footer>`;
   }
 
@@ -656,6 +674,28 @@
       </section></main>`;
   }
 
+  function appPicker(done) {
+    const blocked = new Set(JSON.parse(NATIVE.getBlockedApps()));
+    const apps = JSON.parse(NATIVE.getApps()).sort((a, b) => blocked.has(b.pkg) - blocked.has(a.pkg));
+    const rows = apps
+      .map(
+        (a) => `<label class="app"><input type="checkbox" name="app" value="${esc(a.pkg)}" ${blocked.has(a.pkg) ? 'checked' : ''}>
+          ${esc(a.label)}</label>`
+      )
+      .join('');
+    return `<fieldset class="apps" ${done ? '' : 'disabled'}>
+        <legend>Blocked apps</legend>
+        <small>${
+          done
+            ? NATIVE.isBlockerOn()
+              ? 'These apps send you to your lesson until each day’s lesson is done.'
+              : 'The app blocker is off. Turn it on from the home screen.'
+            : 'Locked until you finish today’s lesson.'
+        }</small>
+        <div class="app-list">${rows}</div>
+      </fieldset>`;
+  }
+
   function renderSettings() {
     const done = isDoneToday(state);
     $app.innerHTML = `${header()}<main>
@@ -666,7 +706,7 @@
             <input type="number" name="newPerDay" min="${MIN_NEW_PER_DAY}" max="30" value="${state.settings.newPerDay}">
             <small>Minimum ${MIN_NEW_PER_DAY}. Nice try.</small>
           </label>
-          <label>Blocked sites (one per line)
+          ${NATIVE ? appPicker(done) : `<label>Blocked sites (one per line)
             <textarea name="blocklist" rows="8" ${done ? '' : 'disabled'}>${esc(state.settings.blocklist.join('\n'))}</textarea>
             <small>${
               done
@@ -675,7 +715,7 @@
                   : 'Blocking only works when this is installed as a browser extension (see README).'
                 : 'Locked until you finish today’s lesson.'
             }</small>
-          </label>
+          </label>`}
           <button class="btn primary">Save</button>
         </form>
         <hr>
@@ -684,7 +724,7 @@
         <button class="btn ghost" data-action="test">${state.placement && state.placement.date ? 'Retake' : 'Take'} the placement test</button>
         <hr>
         <h2>Pronunciation</h2>
-        <p>${canSpeak() ? `Using voice: ${esc(zhVoice.name)}` : 'No Chinese voice found on this device, so listening exercises are off. Install a Chinese (zh-CN) text-to-speech voice in your OS settings.'}</p>
+        <p>${canSpeak() ? `Using voice: ${esc(voiceName())}` : 'No Chinese voice found on this device, so listening exercises are off. Install a Chinese (zh-CN) text-to-speech voice in your OS settings.'}</p>
         ${canSpeak() ? '<button class="btn ghost" data-action="speak" data-text="你好，我们开始学习汉语吧">🔊 Test voice</button>' : ''}
         <hr>
         <h2>Reset all progress</h2>
@@ -718,6 +758,21 @@
       if (test) testAnswer(el.dataset.id);
     },
     practice: startPractice,
+    openApp() {
+      if (blockedApp) NATIVE.openApp(blockedApp.pkg);
+    },
+    blockerSettings() {
+      NATIVE.openBlockerSettings();
+    },
+    blockerHelp() {
+      alert(
+        'Android protects accessibility settings for apps installed outside the Play Store.\n\n' +
+          '1. On the next screen, tap ⋮ (top right) → "Allow restricted settings" and confirm.\n' +
+          '2. Come back here and tap "Turn on app blocker" again.\n' +
+          '3. Find 汉字 Every Day in the list and switch it on.'
+      );
+      NATIVE.openAppSettings();
+    },
     next,
     speak(el) {
       speak(el.dataset.text);
@@ -748,6 +803,7 @@
       const data = new FormData(form);
       const n = Math.round(Number(data.get('newPerDay')));
       state.settings.newPerDay = Math.min(30, Math.max(MIN_NEW_PER_DAY, n || MIN_NEW_PER_DAY));
+      if (NATIVE && isDoneToday(state)) NATIVE.setBlockedApps(JSON.stringify(data.getAll('app')));
       if (isDoneToday(state) && data.has('blocklist')) {
         state.settings.blocklist = String(data.get('blocklist'))
           .split('\n')
@@ -803,6 +859,21 @@
         render();
       }
     });
+  }
+
+  if (NATIVE) {
+    // These can fire before saved progress has loaded, hence the state checks.
+    window.onNativeVoice = () => state && render();
+    window.onNativeResume = () => {
+      if (state && !session && !test) render();
+    };
+    window.onNativeBlocked = (pkg, name) => {
+      blockedApp = { pkg, name };
+      if (state && !session && !test) {
+        view = 'home';
+        render();
+      }
+    };
   }
 
   if (!IS_EXT && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {

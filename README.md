@@ -45,7 +45,27 @@ Edit the blocked sites in **Settings** (after finishing that day's lesson).
 
 Open `index.html` in any browser. You get the lessons and streaks, but no site blocking. Progress is stored in that browser's local storage.
 
-### On your phone (iPhone or Android)
+### Android app (recommended on Android — this one can block apps)
+
+A real Android app with the same lessons, plus:
+- **App blocker:** opening Instagram, TikTok, YouTube or any app you pick sends you straight to your lesson until today's is done. When you finish, a button takes you back to the app you were trying to open.
+- **7 pm reminder** notification if you haven't done today's lesson.
+- **Chinese pronunciation** through Android's built-in voice.
+
+**Install:**
+1. On your phone, open **https://github.com/BlueX7710/Chinese/releases/latest/download/hanzi-every-day.apk**
+2. Open the downloaded file. If Android asks, allow your browser to **install unknown apps**, then tap **Install**. (It's not from the Play Store, so Play Protect may warn you. Tap **More details → Install anyway**.)
+3. Open **汉字 Every Day** and tap **Turn on app blocker**. Find 汉字 Every Day in the list and switch it on.
+   - If Android says **"Restricted setting"**: open Settings → Apps → 汉字 Every Day → ⋮ (top right) → **Allow restricted settings**, then try again. Android does this for every app installed outside the Play Store.
+4. Pick which apps to block in **Settings** (editable only after that day's lesson is done).
+
+**Updating:** install the newest APK from the same link over the old one. Your progress is kept. Uninstalling the app deletes your progress.
+
+**Signing (one-time, for whoever owns the repo):** add two repository secrets under Settings → Secrets and variables → Actions: `ANDROID_KEYSTORE_B64` (the signing keystore, base64-encoded) and `ANDROID_KEYSTORE_PASSWORD`. Without them each build gets a throwaway key, and a new build can't install over an old one. The key is never stored in the repo.
+
+How it's built: `android/` wraps the same web files in a WebView. A GitHub Action builds the APK on every push and publishes it to the link above. The blocker is an Android accessibility service. It only looks at *which app* is opening and never reads what's on your screen. You can still get around it by switching the blocker off in Android settings, so don't.
+
+### On your phone as a web app (iPhone or Android)
 
 The app installs to your home screen and works offline. Open **https://bluex7710.github.io/Chinese/** on your phone, then:
 
@@ -70,7 +90,7 @@ A web app can't block other apps by itself, but iPhone's built-in **Shortcuts** 
 
 Now opening a locked app throws you into the lesson. When you finish, tap **Unlock my apps for today**. That runs `Hanzi Unlock`, and the locked apps open normally until midnight.
 
-On **Android** there's no built-in equivalent. Use Digital Wellbeing app timers, or an automation app such as MacroDroid, to open the lesson link when a distracting app launches.
+On **Android**, use the Android app above instead; it blocks apps on its own.
 
 ## Hosting
 
@@ -94,3 +114,5 @@ Pronunciation uses your system's text-to-speech. If you hear nothing, install a 
 | `shared.js` | Helpers shared by the app and the extension |
 | `manifest.json`, `background.js` | The Chrome extension (site blocker, badge, opens on startup) |
 | `app.webmanifest`, `sw.js` | Phone install + offline support |
+| `android/` | Android app: WebView wrapper, app blocker, reminder |
+| `.github/workflows/android.yml` | Builds the APK and publishes it as a release |
