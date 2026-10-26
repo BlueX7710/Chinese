@@ -47,6 +47,16 @@ jobs:
           name: Hanzi-Every-Day-apk
           path: Hanzi-Every-Day.apk
 
+      # GitHub compares asset names ignoring case, so an old file with a similar name
+      # (e.g. hanzi-every-day.apk) blocks the upload. Start from an empty release.
+      - name: Remove old APKs from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in $(gh release view android-latest --json assets -q '.assets[].name' 2>/dev/null); do
+            gh release delete-asset android-latest "$asset" -y
+          done
+
       # Keeps one always-current download link:
       # https://github.com/<owner>/<repo>/releases/latest/download/Hanzi-Every-Day.apk
       - name: Publish release
