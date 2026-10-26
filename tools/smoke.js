@@ -24,7 +24,7 @@ function fakeAndroid() {
   let on = false;
   window.HanziNative = {
     hasVoice: () => true,
-    speak: () => {},
+    speak: (t) => { window.__spoken = t; }, // listening questions are answered from this
     lessonDone: (d) => calls.push('done:' + d),
     getApps: () => JSON.stringify([
       { pkg: 'com.instagram.android', label: 'Instagram' },
@@ -71,7 +71,9 @@ function fakeAndroid() {
       }
       const correct = label.startsWith('What does')
         ? await p.textContent('.lesson .hanzi')
-        : await p.evaluate((m) => WORDS.find((w) => w.m === m).h, await p.textContent('.meaning.xl'));
+        : label.startsWith('Which one did you hear')
+          ? await p.evaluate(() => window.__spoken)
+          : await p.evaluate((m) => WORDS.find((w) => w.m === m).h, await p.textContent('.meaning.xl'));
       const ids = await p.$$eval('[data-action=choose]', (b) => b.map((x) => x.dataset.id));
       const pick = wrongDone ? correct : ids.find((id) => id !== correct);
       wrongDone = true;

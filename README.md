@@ -20,7 +20,7 @@ Progress is stored only on your own device, separately for each app and browser.
 ## Install
 
 - **Android app**: download `Hanzi-Every-Day.apk` from [Releases](../../releases/latest), open it on your phone and allow the install (Play Protect may warn you: **More details → Install anyway**). Then open the app and tap **Turn on app blocker**. If Android says **"Restricted setting"**, tap the link under the button for the steps (Settings → Apps → 汉字 Every Day → ⋮ → **Allow restricted settings**). To update, install the newest APK over the old one; uninstalling deletes your progress.
-- **Any phone or computer**: open the link above. Then use **Install app** (Chrome, Edge, Android) or **Share → Add to Home Screen** (iPhone/iPad Safari).
+- **Any phone or computer**: open the link above. Then tap the **Install app** button at the top (Chrome, Edge, Android), or on iPhone/iPad follow the hint at the bottom: **Share → Add to Home Screen** in Safari. On an Android phone the site also links to the Android app.
 - **Chrome extension** (blocks websites): download this repo, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the `docs` folder.
 
 ### Making an iPhone block apps (optional, ~5 minutes)

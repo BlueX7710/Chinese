@@ -207,3 +207,9 @@ footer { text-align: center; margin-top: 32px; }
 .app { display: flex !important; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 400 !important; border-bottom: 1px solid var(--line); }
 .app:last-child { border-bottom: 0; }
 .app input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* Installing */
+.top-right { display: flex; align-items: center; gap: 12px; }
+.btn.install { padding: 6px 12px; font-size: 14px; background: var(--accent); color: var(--accent-ink); }
+.install-box { display: grid; justify-items: center; gap: 6px; margin-bottom: 20px; }
+.install-box small, .install-hint { color: var(--muted); font-size: 13px; margin: 0; max-width: 360px; }

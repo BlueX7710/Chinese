@@ -29,6 +29,16 @@
   let session = null; // active lesson, or null on the home/settings screens
   let test = null; // active placement test
   let testResult = null;
+
+  // Installing: Chrome/Edge/Android fire beforeinstallprompt; iPhone Safari needs the Share sheet.
+  const APK_URL = 'https://github.com/BlueX7710/Chinese/releases/latest/download/Hanzi-Every-Day.apk';
+  const UA = navigator.userAgent;
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const inBrowser = !NATIVE && !IS_EXT && !standalone;
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const isIOSSafari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(UA);
+  const isAndroid = /Android/.test(UA);
+  let installEvt = null;
   let view = 'home';
   let lastSummary = null;
 
@@ -419,7 +429,10 @@
     return `
       <header class="top">
         <button class="brand" data-action="home">汉字 <span>Every Day</span></button>
-        <div class="streak ${s ? '' : 'cold'}" title="Day streak">🔥 ${s}</div>
+        <div class="top-right">
+          ${installEvt ? '<button class="btn install" data-action="install">Install app</button>' : ''}
+          <div class="streak ${s ? '' : 'cold'}" title="Day streak">🔥 ${s}</div>
+        </div>
       </header>`;
   }
 
@@ -515,7 +528,7 @@
           </div>
         </section>`;
     $app.innerHTML = `${header()}<main>${blockerOff}${offer}${main}${statsBlock()}</main>
-      <footer><button class="link" data-action="settings">Settings</button></footer>`;
+      <footer>${installHelp()}<button class="link" data-action="settings">Settings</button></footer>`;
   }
 
   function safeHost(url) {
@@ -616,6 +629,20 @@
     if (input && !a) input.focus();
     const cont = document.getElementById('cont');
     if (cont) cont.focus();
+  }
+
+  function installHelp() {
+    if (!inBrowser) return '';
+    const parts = [];
+    if (isAndroid) {
+      parts.push(`<a class="btn ghost" href="${APK_URL}">Get the Android app</a>
+        <small>The app version can block Instagram, TikTok and other apps until you've studied.</small>`);
+    } else if (isIOSSafari) {
+      parts.push('<p class="install-hint">To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>');
+    } else if (isIOS) {
+      parts.push('<p class="install-hint">To install, open this page in <b>Safari</b>, tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>');
+    }
+    return parts.length ? `<div class="install-box">${parts.join('')}</div>` : '';
   }
 
   function renderTest() {
@@ -758,6 +785,18 @@
       if (test) testAnswer(el.dataset.id);
     },
     practice: startPractice,
+    async install() {
+      if (!installEvt) return;
+      const evt = installEvt;
+      installEvt = null;
+      evt.prompt();
+      try {
+        await evt.userChoice;
+      } catch {
+        // The user closed the prompt; nothing to do.
+      }
+      render();
+    },
     openApp() {
       if (blockedApp) NATIVE.openApp(blockedApp.pkg);
     },
@@ -874,6 +913,18 @@
         render();
       }
     };
+  }
+
+  if (inBrowser) {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      installEvt = e;
+      if (state && !session && !test) render();
+    });
+    window.addEventListener('appinstalled', () => {
+      installEvt = null;
+      if (state && !session && !test) render();
+    });
   }
 
   if (!IS_EXT && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
