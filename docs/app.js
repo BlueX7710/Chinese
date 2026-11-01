@@ -38,6 +38,9 @@
   const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
   const isIOSSafari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(UA);
   const isAndroid = /Android/.test(UA);
+  const isDesktop = !isAndroid && !isIOS;
+  const isChromium = /Chrome|Chromium|Edg\//.test(UA);
+  const EXTENSION_URL = 'https://github.com/BlueX7710/Chinese/releases/latest/download/Hanzi-Every-Day-Chrome.zip';
   let installEvt = null;
   let view = 'home';
   let lastSummary = null;
@@ -641,6 +644,20 @@
       parts.push('<p class="install-hint">To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>');
     } else if (isIOS) {
       parts.push('<p class="install-hint">To install, open this page in <b>Safari</b>, tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>');
+    } else if (isDesktop) {
+      parts.push(`<details class="desk">
+          <summary>Block YouTube, Reddit and other sites on this computer</summary>
+          ${
+            isChromium
+              ? `<ol>
+                  <li><a href="${EXTENSION_URL}">Download the extension</a> and unzip it (right-click → <b>Extract All</b> on Windows).</li>
+                  <li>Open <code>chrome://extensions</code> (or <code>edge://extensions</code>) in a new tab.</li>
+                  <li>Turn on <b>Developer mode</b>, click <b>Load unpacked</b> and pick the unzipped folder.</li>
+                </ol>
+                <small>The extension has its own copy of your lessons, so start your streak there.</small>`
+              : '<small>The website blocker is a Chrome extension. Open this page in Chrome, Edge or Brave to get it.</small>'
+          }
+        </details>`);
     }
     return parts.length ? `<div class="install-box">${parts.join('')}</div>` : '';
   }

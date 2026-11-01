@@ -1,4 +1,4 @@
-name: Android app
+name: Android app and Chrome extension
 
 on:
   push:
@@ -49,7 +49,10 @@ jobs:
 
       # GitHub compares asset names ignoring case, so an old file with a similar name
       # (e.g. hanzi-every-day.apk) blocks the upload. Start from an empty release.
-      - name: Remove old APKs from the release
+      - name: Zip the Chrome extension
+        run: cd docs && zip -qr ../Hanzi-Every-Day-Chrome.zip . -x 'sw.js' 'manifest.webmanifest'
+
+      - name: Remove old files from the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -57,15 +60,20 @@ jobs:
             gh release delete-asset android-latest "$asset" -y
           done
 
-      # Keeps one always-current download link:
+      # Keeps always-current download links:
       # https://github.com/<owner>/<repo>/releases/latest/download/Hanzi-Every-Day.apk
+      # https://github.com/<owner>/<repo>/releases/latest/download/Hanzi-Every-Day-Chrome.zip
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
-          name: Android app
+          name: 汉字 Every Day apps
           body: |
-            Download **Hanzi-Every-Day.apk** below on your Android phone and open it to install.
+            - **Android:** download **Hanzi-Every-Day.apk** on your phone and open it to install.
+            - **Computer (Chrome, Edge, Brave):** download **Hanzi-Every-Day-Chrome.zip**, unzip it, open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and pick the unzipped folder.
+
             Built from ${{ github.sha }}.
-          files: Hanzi-Every-Day.apk
+          files: |
+            Hanzi-Every-Day.apk
+            Hanzi-Every-Day-Chrome.zip
           make_latest: true

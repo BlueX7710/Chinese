@@ -213,3 +213,11 @@ footer { text-align: center; margin-top: 32px; }
 .btn.install { padding: 6px 12px; font-size: 14px; background: var(--accent); color: var(--accent-ink); }
 .install-box { display: grid; justify-items: center; gap: 6px; margin-bottom: 20px; }
 .install-box small, .install-hint { color: var(--muted); font-size: 13px; margin: 0; max-width: 360px; }
+
+/* Desktop: website blocker instructions */
+.desk { max-width: 420px; text-align: left; font-size: 14px; color: var(--muted); }
+.desk summary { cursor: pointer; color: var(--text); font-weight: 600; text-align: center; }
+.desk ol { padding-left: 20px; margin: 12px 0 8px; }
+.desk li { margin-bottom: 6px; }
+.desk a { color: var(--accent); }
+.desk code { background: var(--line); padding: 1px 5px; border-radius: 4px; font-size: 13px; }

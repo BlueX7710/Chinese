@@ -21,7 +21,7 @@ Progress is stored only on your own device, separately for each app and browser.
 
 - **Android app**: download `Hanzi-Every-Day.apk` from [Releases](../../releases/latest), open it on your phone and allow the install (Play Protect may warn you: **More details → Install anyway**). Then open the app and tap **Turn on app blocker**. If Android says **"Restricted setting"**, tap the link under the button for the steps (Settings → Apps → 汉字 Every Day → ⋮ → **Allow restricted settings**). To update, install the newest APK over the old one; uninstalling deletes your progress.
 - **Any phone or computer**: open the link above. Then tap the **Install app** button at the top (Chrome, Edge, Android), or on iPhone/iPad follow the hint at the bottom: **Share → Add to Home Screen** in Safari. On an Android phone the site also links to the Android app.
-- **Chrome extension** (blocks websites): download this repo, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the `docs` folder.
+- **Computer (Chrome, Edge, Brave)**: open the link above and click **Install app** to get it in its own window. To block websites, download `Hanzi-Every-Day-Chrome.zip` from [Releases](../../releases/latest) and unzip it, open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder. The extension keeps its own copy of your progress, so do your daily lesson there.
 
 ### Making an iPhone block apps (optional, ~5 minutes)
 
@@ -40,8 +40,9 @@ Opening a locked app now sends you to the lesson. When you finish, tap **Unlock 
 | --- | --- |
 | `docs/` | The web app, served by GitHub Pages: `index.html`, `app.js`, `words.js` (the vocabulary), `styles.css`, the manifest, offline service worker and icons. It's also the Chrome extension (`manifest.json`, `background.js`). |
 | `android-app/` | The Android app: a WebView around `docs/` (copied in at build time) plus the app blocker, reminder and Chinese voice in Java. |
-| `.github/workflows/` | `android.yml` builds the APK on every push to `main` and publishes it to Releases. |
+| `.github/workflows/` | `android.yml` builds the APK and zips the Chrome extension on every push to `main`, and publishes both to Releases. |
 | `tools/` | `smoke.js` tests the app in a browser (lesson, placement test, phone layout and the Android flow). |
+| `index.html` | Forwards to `docs/`, in case GitHub Pages serves the repository root. |
 | `.claude/skills/effortless/` | The `/effortless` Claude Code skill: test, commit, push and ship in one go. |
 
 ## Building the Android app
