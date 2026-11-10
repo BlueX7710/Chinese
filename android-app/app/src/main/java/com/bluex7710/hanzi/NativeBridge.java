@@ -1,7 +1,6 @@
 package com.bluex7710.hanzi;
 
 import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -9,7 +8,6 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
-import android.text.TextUtils;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -119,25 +117,34 @@ public class NativeBridge {
 
     @JavascriptInterface
     public boolean isBlockerOn() {
-        String enabled = Settings.Secure.getString(
-                activity.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        if (TextUtils.isEmpty(enabled)) return false;
-        ComponentName me = new ComponentName(activity, BlockerService.class);
-        for (String s : enabled.split(":")) {
-            ComponentName c = ComponentName.unflattenFromString(s);
-            if (me.equals(c)) return true;
-        }
-        return false;
+        return WatchService.ready(activity);
     }
 
+    /** Which permission the blocker still needs: "usage", "overlay", or "" when it has both. */
+    @JavascriptInterface
+    public String blockerNeeds() {
+        if (!WatchService.hasUsageAccess(activity)) return "usage";
+        if (!WatchService.canShowOnTop(activity)) return "overlay";
+        return "";
+    }
+
+    /** Opens the Android settings screen for whichever permission is still missing. */
     @JavascriptInterface
     public void openBlockerSettings() {
-        activity.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        Intent i = WatchService.hasUsageAccess(activity)
+                ? new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.fromParts("package", activity.getPackageName(), null))
+                : new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        try {
+            activity.startActivity(i);
+        } catch (android.content.ActivityNotFoundException e) {
+            openAppSettings();
+        }
     }
 
     @JavascriptInterface
     public void openAppSettings() {
-        // Sideloaded apps on Android 13+ need "Allow restricted settings" from here first.
+        // Some Android versions make sideloaded apps tap "Allow restricted settings" here first.
         Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 android.net.Uri.fromParts("package", activity.getPackageName(), null));
         activity.startActivity(i);

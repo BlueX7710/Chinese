@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
         web.loadUrl(url);
 
         ReminderReceiver.schedule(this);
+        WatchService.start(this);
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -69,7 +70,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Coming back from Android settings: refresh the "app blocker is on/off" state.
+        // Coming back from Android settings: start the blocker if it was just allowed, and refresh
+        // the "app blocker is on/off" state.
+        WatchService.start(this);
         if (pageLoaded) web.evaluateJavascript("window.onNativeResume && onNativeResume()", null);
     }
 

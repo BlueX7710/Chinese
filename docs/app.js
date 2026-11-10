@@ -675,12 +675,18 @@
           <button class="btn primary big-btn" data-action="start">Start lesson</button>
         </section>`;
     }
+    // The blocker needs two Android permissions, granted one at a time.
+    const needs = NATIVE && !NATIVE.isBlockerOn() ? (NATIVE.blockerNeeds ? NATIVE.blockerNeeds() : 'usage') : '';
     const blockerOff =
-      NATIVE && !NATIVE.isBlockerOn()
+      needs
         ? `<section class="card warn">
-            <h2>The app blocker is off</h2>
-            <p>Turn it on so Instagram, TikTok, YouTube and friends send you here until your lesson is done.</p>
-            <button class="btn primary" data-action="blockerSettings">Turn on app blocker</button>
+            <h2>Turn on the app blocker · step ${needs === 'overlay' ? 2 : 1} of 2</h2>
+            <p>${
+              needs === 'overlay'
+                ? 'Last step: allow <b>Display over other apps</b>, so your lesson can pop up in front of a blocked app.'
+                : 'Allow <b>Usage access</b> so the app can tell when you open Instagram, TikTok or YouTube. Find <b>汉字 Every Day</b> in the list and switch it on.'
+            }</p>
+            <button class="btn primary" data-action="blockerSettings">Open the setting</button>
             <button class="link" data-action="blockerHelp">It says "restricted setting"?</button>
           </section>`
         : '';
@@ -1013,10 +1019,10 @@
     },
     blockerHelp() {
       alert(
-        'Android protects accessibility settings for apps installed outside the Play Store.\n\n' +
+        'Some phones protect this setting for apps installed outside the Play Store.\n\n' +
           '1. On the next screen, tap ⋮ (top right) → "Allow restricted settings" and confirm.\n' +
-          '2. Come back here and tap "Turn on app blocker" again.\n' +
-          '3. Find 汉字 Every Day in the list and switch it on.'
+          '2. Come back here and tap "Open the setting" again.\n' +
+          '3. Switch it on for 汉字 Every Day.'
       );
       NATIVE.openAppSettings();
     },

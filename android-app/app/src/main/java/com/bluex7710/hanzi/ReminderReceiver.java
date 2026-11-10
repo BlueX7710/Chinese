@@ -31,6 +31,7 @@ public class ReminderReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context c, Intent intent) {
+        WatchService.start(c);
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             schedule(c);
             return;

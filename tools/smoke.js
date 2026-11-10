@@ -21,7 +21,7 @@ const numbered = (p) => p.split(' ').map((s) => {
 function fakeAndroid() {
   const calls = (window.__calls = []);
   let blocked = ['com.instagram.android', 'com.google.android.youtube'];
-  let on = false;
+  const needs = ['usage', 'overlay']; // the two permissions the blocker asks for, in order
   window.HanziNative = {
     hasVoice: () => true,
     speak: (t) => { window.__spoken = t; }, // listening questions are answered from this
@@ -33,8 +33,9 @@ function fakeAndroid() {
     ]),
     getBlockedApps: () => JSON.stringify(blocked),
     setBlockedApps: (j) => { blocked = JSON.parse(j); calls.push('blocked:' + blocked.join(',')); },
-    isBlockerOn: () => on,
-    openBlockerSettings: () => { on = true; },
+    isBlockerOn: () => needs.length === 0,
+    blockerNeeds: () => needs[0] || '',
+    openBlockerSettings: () => { needs.shift(); }, // as if the user granted it and came back
     openAppSettings: () => {},
     openApp: (p) => calls.push('open:' + p),
   };
@@ -122,9 +123,13 @@ function fakeAndroid() {
   await p.goto(url + '?app=com.instagram.android&appName=Instagram');
   if (!(await p.$('.card.warn'))) fail('Android: no "app blocker is off" warning');
   if (!/Instagram is locked/.test(await p.textContent('main'))) fail('Android: blocked app not named');
+  if (!/Usage access/.test(await p.textContent('.card.warn'))) fail('Android: step 1 does not ask for usage access');
   await p.click('[data-action=blockerSettings]');
   await p.evaluate(() => onNativeResume());
-  if (await p.$('.card.warn')) fail('Android: blocker warning still showing after turning it on');
+  if (!/Display over other apps/.test(await p.textContent('.card.warn'))) fail('Android: step 2 does not ask for display over other apps');
+  await p.click('[data-action=blockerSettings]');
+  await p.evaluate(() => onNativeResume());
+  if (await p.$('.card.warn')) fail('Android: blocker warning still showing after both steps');
   await p.click('[data-action=skipTest]');
   await p.click('[data-action=start]');
   await doLesson(p);

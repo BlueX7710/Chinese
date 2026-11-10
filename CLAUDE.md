@@ -17,8 +17,10 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 - `android-app/` wraps `docs/` in a WebView. Gradle copies the web files into the APK at build
   time, so there's nothing to sync by hand. The Java side, exposed to JavaScript as
   `window.HanziNative`, adds Chinese text-to-speech (Android's WebView has no `speechSynthesis`),
-  the installed-app list, and `lessonDone(date)`. `BlockerService` is an accessibility service that
-  redirects blocked apps; `ReminderReceiver` sends the 7 pm reminder.
+  the installed-app list, and `lessonDone(date)`. `WatchService` is a foreground service that
+  polls usage access for the app in front and opens the lesson over blocked apps (needs "display
+  over other apps"). It must not become an accessibility service: Play Protect refuses to install
+  sideloaded apps that declare one. `ReminderReceiver` sends the 7 pm reminder.
 - `app.js` checks `NATIVE` (Android), `IS_EXT` (extension) and `iosGate` (`?gate=ios`, iPhone
   Shortcuts) to switch behaviour. Everything else is shared.
 - Files use LF line endings.
