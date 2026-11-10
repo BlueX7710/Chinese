@@ -1,10 +1,11 @@
 // Offline support for the installed phone app. Serves cached files instantly and
 // refreshes them in the background, so updates show up on the next launch.
-const CACHE = 'hanzi-v6';
+const CACHE = 'hanzi-v7';
 const FILES = [
   './',
   './index.html',
   './app.js',
+  './fun.js',
   './shared.js',
   './words.js',
   './styles.css',

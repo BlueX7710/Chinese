@@ -44,8 +44,8 @@ public class ReminderReceiver extends BroadcastReceiver {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notify)
-                .setContentTitle("你还没学习！ You haven't studied today")
-                .setContentText("Your streak dies at midnight. Do today's lesson now.")
+                .setContentTitle("加油！ Bao is waiting for you 🐼")
+                .setContentText("Today's lesson takes a few minutes. Keep your streak alive!")
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build();

@@ -91,8 +91,13 @@ function fakeAndroid() {
   const summary = await p.textContent('main');
   if (!/Lesson complete/.test(summary)) fail('daily lesson did not complete: ' + summary.replace(/\s+/g, ' '));
   if (!/4 of 5 words right/.test(summary)) fail('wrong answer was not counted: ' + summary.replace(/\s+/g, ' '));
+  if (!/\+\d+ XP/.test(summary)) fail('summary shows no XP');
+  if (!/New badge: First steps/.test(summary)) fail('first-lesson badge not awarded');
   await p.click('[data-action=home]');
   if (!/Today's lesson is done/.test(await p.textContent('main'))) fail('home does not show the lesson as done');
+  if (!(await p.$('.badge.on'))) fail('home shows no earned badge');
+  const xp = await p.evaluate(() => JSON.parse(localStorage.state).xp);
+  if (!(xp >= 150)) fail(`expected at least 150 XP after a first lesson, got ${xp}`);
 
   // 2. Phone: placement test for someone who knows exactly the first 60 words.
   p = await open({ ...devices['iPhone 13'] });
@@ -116,7 +121,7 @@ function fakeAndroid() {
   p = await open({ ...devices['Pixel 7'] }, fakeAndroid);
   await p.goto(url + '?app=com.instagram.android&appName=Instagram');
   if (!(await p.$('.card.warn'))) fail('Android: no "app blocker is off" warning');
-  if (!/You don't get Instagram/.test(await p.textContent('main'))) fail('Android: blocked app not named');
+  if (!/Instagram is locked/.test(await p.textContent('main'))) fail('Android: blocked app not named');
   await p.click('[data-action=blockerSettings]');
   await p.evaluate(() => onNativeResume());
   if (await p.$('.card.warn')) fail('Android: blocker warning still showing after turning it on');

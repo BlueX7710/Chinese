@@ -29,6 +29,7 @@
   let session = null; // active lesson, or null on the home/settings screens
   let test = null; // active placement test
   let testResult = null;
+  let barPct = 0; // where the lesson progress bar last stood, so it can animate
 
   // Installing: Chrome/Edge/Android fire beforeinstallprompt; iPhone Safari needs the Share sheet.
   const APK_URL = 'https://github.com/BlueX7710/Chinese/releases/latest/download/Hanzi-Every-Day.apk';
@@ -61,9 +62,13 @@
       cards: {},
       completedDays: [],
       newToday: { date: '', count: 0 },
-      settings: { newPerDay: 5, blocklist: [...DEFAULT_BLOCKLIST] },
+      settings: { newPerDay: 5, blocklist: [...DEFAULT_BLOCKLIST], sound: true },
       stats: { answered: 0, correct: 0 },
       placement: null, // set once the placement test is taken or skipped
+      xp: 0,
+      bestCombo: 0,
+      perfectLessons: 0,
+      badges: {}, // badge id -> date earned
     };
   }
 
@@ -82,6 +87,9 @@
     state = Object.assign(base, saved || {});
     state.settings = Object.assign(defaultState().settings, state.settings);
     state.stats = Object.assign(defaultState().stats, state.stats);
+    // Progress from before XP existed still counts.
+    if (saved && saved.xp === undefined) state.xp = state.stats.correct * 10;
+    awardBadges();
   }
 
   function save() {
@@ -170,6 +178,73 @@
     speechSynthesis.speak(u);
   }
 
+  // ---------- XP, levels and badges ----------
+
+  const play = (name) => state.settings.sound && Fun.sound(name);
+
+  // Level titles double as vocabulary: [from level, hanzi, pinyin, meaning]
+  const LEVEL_TITLES = [
+    [1, '新手', 'xīnshǒu', 'Newcomer'],
+    [2, '学生', 'xuésheng', 'Student'],
+    [4, '读者', 'dúzhě', 'Reader'],
+    [7, '高手', 'gāoshǒu', 'Ace'],
+    [10, '大师', 'dàshī', 'Master'],
+    [15, '龙', 'lóng', 'Dragon'],
+  ];
+  const xpForLevel = (n) => 50 * n * (n - 1); // total XP to reach level n: 0, 100, 300, 600, 1000…
+
+  function levelInfo(xp = state.xp) {
+    let n = 1;
+    while (xpForLevel(n + 1) <= xp) n++;
+    const [, h, p, m] = [...LEVEL_TITLES].reverse().find((t) => n >= t[0]);
+    return { n, h, p, m, into: xp - xpForLevel(n), span: xpForLevel(n + 1) - xpForLevel(n) };
+  }
+
+  // Things Bao says when you get one right. Real phrases, so they teach too.
+  const PRAISE = [
+    ['太棒了!', 'tài bàng le', 'Awesome!'],
+    ['很好!', 'hěn hǎo', 'Very good!'],
+    ['对了!', 'duì le', "That's right!"],
+    ['真棒!', 'zhēn bàng', 'Great job!'],
+    ['厉害!', 'lì hai', 'Impressive!'],
+    ['没错!', 'méi cuò', 'Exactly!'],
+  ];
+
+  function bestStreak() {
+    const days = [...new Set(state.completedDays)].sort();
+    let best = 0;
+    let run = 0;
+    days.forEach((d, i) => {
+      run = i && addDays(days[i - 1], 1) === d ? run + 1 : 1;
+      best = Math.max(best, run);
+    });
+    return best;
+  }
+
+  const wordsSeen = () => Object.keys(state.cards).length;
+  const wordsMastered = () => Object.values(state.cards).filter((c) => c.interval >= 21).length;
+
+  const BADGES = [
+    { id: 'first', icon: '🌱', name: 'First steps', how: 'Finish your first lesson', test: () => state.completedDays.length >= 1 },
+    { id: 'streak3', icon: '🔥', name: '3-day streak', how: 'Study 3 days in a row', test: () => bestStreak() >= 3 },
+    { id: 'streak7', icon: '⚡', name: 'Full week', how: 'Study 7 days in a row', test: () => bestStreak() >= 7 },
+    { id: 'streak30', icon: '🏆', name: '30-day streak', how: 'Study 30 days in a row', test: () => bestStreak() >= 30 },
+    { id: 'perfect', icon: '💯', name: 'Perfect lesson', how: 'Finish a lesson with no mistakes', test: () => state.perfectLessons >= 1 },
+    { id: 'combo10', icon: '🎯', name: 'On fire', how: 'Get 10 right in a row', test: () => state.bestCombo >= 10 },
+    { id: 'words10', icon: '📗', name: '10 words', how: 'Learn 10 words', test: () => wordsSeen() >= 10 },
+    { id: 'words50', icon: '📚', name: '50 words', how: 'Learn 50 words', test: () => wordsSeen() >= 50 },
+    { id: 'words100', icon: '🎓', name: '100 words', how: 'Learn 100 words', test: () => wordsSeen() >= 100 },
+    { id: 'master10', icon: '🧠', name: 'Long memory', how: 'Master 10 words', test: () => wordsMastered() >= 10 },
+    { id: 'hsk1', icon: '🐉', name: 'HSK 1 hero', how: `Learn all ${WORDS.length} words`, test: () => wordsSeen() >= WORDS.length },
+  ];
+
+  // Marks newly earned badges and returns them.
+  function awardBadges() {
+    const fresh = BADGES.filter((b) => !state.badges[b.id] && b.test());
+    fresh.forEach((b) => (state.badges[b.id] = today()));
+    return fresh;
+  }
+
   // ---------- scheduling ----------
 
   function introducedToday() {
@@ -216,7 +291,7 @@
   }
 
   function lostStreak() {
-    // Length of the streak that ended before yesterday, if any — for shaming purposes.
+    // Length of the streak that ended before yesterday, if any, so Bao can say he missed you.
     const days = new Set(state.completedDays);
     if (days.has(today()) || days.has(addDays(today(), -1))) return 0;
     const sorted = [...state.completedDays].sort();
@@ -283,7 +358,11 @@
 
   function beginSession(mode, queue, need) {
     if (!queue.length) return;
-    session = { mode, queue, need, failed: new Set(), total: queue.length, done: 0, current: null, answer: null };
+    session = {
+      mode, queue, need, failed: new Set(), total: queue.length, done: 0, current: null, answer: null,
+      combo: 0, xp: 0, startLevel: levelInfo().n,
+    };
+    barPct = 0;
     next();
   }
 
@@ -332,7 +411,19 @@
     if (correct) {
       session.need[id]--;
       if (session.need[id] <= 0 && session.mode === 'daily') schedule(id, !session.failed.has(id));
+      // XP: 10 per right answer, plus a little extra for each one in a row (up to +10).
+      session.combo++;
+      state.bestCombo = Math.max(state.bestCombo, session.combo);
+      const gain = 10 + Math.min(session.combo - 1, 5) * 2;
+      const before = levelInfo().n;
+      state.xp += gain;
+      session.xp += gain;
+      Object.assign(session.answer, { gain, combo: session.combo, praise: pick(PRAISE) });
+      if (levelInfo().n > before) session.answer.levelUp = levelInfo();
+      play(session.answer.levelUp ? 'level' : 'correct');
     } else {
+      session.combo = 0;
+      play('wrong');
       if (session.mode === 'daily' && !session.failed.has(id)) {
         const c = state.cards[id];
         c.lapses++;
@@ -350,11 +441,33 @@
 
   function finishSession() {
     const cards = Object.keys(session.need).length;
-    lastSummary = { mode: session.mode, cards, clean: cards - session.failed.size };
+    const perfect = session.failed.size === 0 && cards >= 3;
+    let bonus = 0;
+    let justCompleted = false;
+    if (session.mode === 'daily') {
+      const wasDone = isDoneToday(state);
+      checkComplete();
+      justCompleted = !wasDone && isDoneToday(state);
+      if (justCompleted) bonus += 50;
+      if (perfect) {
+        bonus += 25;
+        state.perfectLessons++;
+      }
+    }
+    state.xp += bonus;
+    const level = levelInfo();
+    lastSummary = {
+      mode: session.mode, cards, clean: cards - session.failed.size, perfect, justCompleted,
+      xp: session.xp + bonus, levelUp: level.n > session.startLevel ? level : null, badges: awardBadges(),
+    };
     session = null;
-    if (lastSummary.mode === 'daily') checkComplete();
+    save();
     view = 'summary';
     render();
+    if (justCompleted || lastSummary.mode === 'practice') {
+      play('complete');
+      Fun.confetti();
+    }
   }
 
   // ---------- placement test ----------
@@ -434,6 +547,7 @@
         <button class="brand" data-action="home">汉字 <span>Every Day</span></button>
         <div class="top-right">
           ${installEvt ? '<button class="btn install" data-action="install">Install app</button>' : ''}
+          <div class="xp-chip" title="${state.xp} XP">⭐ Lv ${levelInfo().n}</div>
           <div class="streak ${s ? '' : 'cold'}" title="Day streak">🔥 ${s}</div>
         </div>
       </header>`;
@@ -464,11 +578,56 @@
     return `<div class="cal">${cells}</div>`;
   }
 
+  function levelCard() {
+    const l = levelInfo();
+    return `
+      <section class="level">
+        <div class="lv-num">Lv ${l.n}</div>
+        <div class="lv-body">
+          <div class="lv-title"><b class="hanzi-inline">${l.h}</b> ${esc(l.p)} · ${esc(l.m)}</div>
+          <div class="bar"><div style="width:${Math.round((100 * l.into) / l.span)}%"></div></div>
+          <small>${l.into} / ${l.span} XP to level ${l.n + 1}</small>
+        </div>
+      </section>`;
+  }
+
+  function badgeTile(b) {
+    const on = !!state.badges[b.id];
+    return `<button class="badge ${on ? 'on' : ''}" data-action="badge" data-id="${b.id}">
+      <span>${on ? b.icon : '🔒'}</span><small>${esc(b.name)}</small></button>`;
+  }
+
+  function badgesBlock() {
+    const earned = BADGES.filter((b) => state.badges[b.id]).length;
+    return `<p class="label">Badges · ${earned} of ${BADGES.length}</p>
+      <div class="badges">${BADGES.map(badgeTile).join('')}</div>`;
+  }
+
+  function greeting() {
+    const h = new Date().getHours();
+    return h < 12
+      ? ['早上好!', 'zǎoshang hǎo', 'Good morning!']
+      : h < 18
+        ? ['下午好!', 'xiàwǔ hǎo', 'Good afternoon!']
+        : ['晚上好!', 'wǎnshang hǎo', 'Good evening!'];
+  }
+
+  // Bao with a speech bubble. `zh` is an optional [hanzi, pinyin, meaning] line he says first.
+  function bao(mood, zh, text) {
+    return `<div class="bao">
+        ${Fun.panda(mood, 88)}
+        <div class="bubble">
+          ${zh ? `<b class="hanzi-inline">${zh[0]}</b> <small>${esc(zh[1])} · ${esc(zh[2])}</small><br>` : ''}${text}
+        </div>
+      </div>`;
+  }
+
   function statsBlock() {
-    const learned = Object.keys(state.cards).length;
-    const mastered = Object.values(state.cards).filter((c) => c.interval >= 21).length;
+    const learned = wordsSeen();
+    const mastered = wordsMastered();
     const acc = state.stats.answered ? Math.round((100 * state.stats.correct) / state.stats.answered) : 0;
     return `
+      ${levelCard()}
       <div class="stats">
         <div><b>${learned}</b><span>words seen</span></div>
         <div><b>${mastered}</b><span>mastered</span></div>
@@ -476,7 +635,8 @@
         <div><b>${WORDS.length - learned}</b><span>to go</span></div>
       </div>
       <p class="label">Last 4 weeks</p>
-      ${calendar()}`;
+      ${calendar()}
+      ${badgesBlock()}`;
   }
 
   function renderHome() {
@@ -488,9 +648,9 @@
     if (done) {
       main = `
         <section class="card ok">
-          <div class="big">✓</div>
+          ${bao('love', ['明天见!', 'míngtiān jiàn', 'See you tomorrow!'], 'You did it. Go enjoy your day.')}
           <h1>Today's lesson is done.</h1>
-          <p>Come back tomorrow. Your words will be waiting.</p>
+          <p>${streak() > 1 ? `That's ${streak()} days in a row. ` : ''}Your words will be waiting tomorrow.</p>
           <div class="row">
             ${continueLink()}
             ${Object.keys(state.cards).length ? '<button class="btn ghost" data-action="practice">Extra practice</button>' : ''}
@@ -502,13 +662,17 @@
       if (r.fresh) parts.push(`<b>${r.fresh}</b> new word${r.fresh === 1 ? '' : 's'}`);
       main = `
         <section class="card owe">
-          ${iosGate ? '<p class="blocked">Your apps are locked until you finish today\'s Chinese.</p>' : ''}
-          ${blockedApp ? `<p class="blocked">Blocked. You don't get <b>${esc(blockedApp.name)}</b> until you finish today's Chinese.</p>` : ''}
-          ${fromUrl ? `<p class="blocked">Blocked. You don't get <b>${esc(safeHost(fromUrl))}</b> until you finish today's Chinese.</p>` : ''}
-          ${lost ? `<p class="shame">Your ${lost}-day streak is dead. Start a new one.</p>` : ''}
-          <h1>You owe today's lesson.</h1>
+          ${iosGate ? '<p class="blocked">🔒 Your apps unlock as soon as you finish today\'s Chinese.</p>' : ''}
+          ${blockedApp ? `<p class="blocked">🔒 <b>${esc(blockedApp.name)}</b> is locked until you finish today's Chinese. It only takes a few minutes!</p>` : ''}
+          ${fromUrl ? `<p class="blocked">🔒 <b>${esc(safeHost(fromUrl))}</b> is locked until you finish today's Chinese. It only takes a few minutes!</p>` : ''}
+          ${
+            lost
+              ? bao('sad', null, `Your ${lost}-day streak ended. I missed you! Let's start a new one today.`)
+              : bao('happy', greeting(), streak() ? `Day ${streak() + 1} of your streak starts now.` : 'Ready when you are.')
+          }
+          <h1>Time for today's Chinese!</h1>
           <p class="owed">${parts.join(' + ')}</p>
-          <button class="btn primary" data-action="start">Start lesson</button>
+          <button class="btn primary big-btn" data-action="start">Start lesson</button>
         </section>`;
     }
     const blockerOff =
@@ -615,9 +779,17 @@
       body = `${prompt}<div class="opts ${type === 'meaning' ? '' : 'grid'}">${opts}</div>`;
     }
 
+    const verdict = a
+      ? a.correct
+        ? `<p class="verdict"><span class="hanzi-inline">${a.praise[0]}</span> <small>${esc(a.praise[1])} · ${esc(a.praise[2])}</small></p>
+           <p class="gain"><span>⭐ +${a.gain} XP</span>${a.combo >= 2 ? `<span class="combo">🔥 ${a.combo} in a row</span>` : ''}</p>
+           ${a.levelUp ? `<p class="levelup">Level up! You're now Lv ${a.levelUp.n} · ${a.levelUp.h} (${esc(a.levelUp.m)})</p>` : ''}`
+        : `<p class="verdict"><span class="hanzi-inline">加油!</span> <small>jiā yóu · Keep going!</small></p>
+           <p class="gain">Not quite. This one comes back until you've got it.</p>`
+      : '';
     const feedback = a
       ? `<div class="feedback ${a.correct ? 'good' : 'bad'}">
-          <p class="verdict">${a.correct ? 'Correct' : 'Wrong — this one comes back until you get it.'}</p>
+          <div class="fb-head"><div>${verdict}</div>${Fun.panda(a.correct ? 'cheer' : 'sad', 60)}</div>
           ${wordReveal(w)}
           <button class="btn primary" data-action="next" id="cont">Continue</button>
         </div>`
@@ -625,8 +797,13 @@
 
     $app.innerHTML = `
       ${header()}
-      <div class="progress"><div style="width:${pct}%"></div></div>
-      <main class="lesson">${body}${feedback}</main>`;
+      <div class="progress"><div id="bar" style="width:${barPct}%"></div></div>
+      <main class="lesson ${a ? '' : 'enter'}">${body}${feedback}</main>`;
+
+    // Start the bar where it was and let it glide to the new value.
+    const bar = document.getElementById('bar');
+    requestAnimationFrame(() => (bar.style.width = pct + '%'));
+    barPct = pct;
 
     const input = document.getElementById('pin');
     if (input && !a) input.focus();
@@ -690,7 +867,7 @@
     const next = r.nextWord ? BY_ID[r.nextWord] : null;
     $app.innerHTML = `${header()}<main>
       <section class="card ok">
-        <div class="big">${r.known ? '🎯' : '🌱'}</div>
+        ${Fun.panda(r.known ? 'cheer' : 'happy', 104)}
         <h1>${r.known ? `You already know about ${r.known} words` : 'Starting from the beginning'}</h1>
         <p>${
           r.known
@@ -705,17 +882,25 @@
   function renderSummary() {
     const s = lastSummary;
     const done = isDoneToday(state);
+    const title = s.mode === 'daily' ? (done ? 'Lesson complete' : 'Session complete') : 'Practice complete';
+    const chips = [`<span>⭐ +${s.xp} XP</span>`];
+    if (s.mode === 'daily' && done) chips.push(`<span>🔥 ${streak()}-day streak</span>`);
+    if (s.perfect) chips.push('<span>💯 Perfect</span>');
     $app.innerHTML = `${header()}<main>
-      <section class="card ok">
-        <div class="big">${s.mode === 'daily' && done ? '🎉' : '✓'}</div>
-        <h1>${s.mode === 'daily' ? (done ? 'Lesson complete' : 'Session complete') : 'Practice complete'}</h1>
+      <section class="card ok celebrate">
+        ${Fun.panda(s.clean === s.cards ? 'love' : 'cheer', 120)}
+        <p class="praise"><b class="hanzi-inline">太棒了!</b> <small>tài bàng le · Awesome!</small></p>
+        <h1>${title}</h1>
         <p>${s.clean} of ${s.cards} words right on the first try.</p>
-        ${s.mode === 'daily' && done ? `<p>Streak: <b>${streak()}</b> day${streak() === 1 ? '' : 's'}.</p>` : ''}
+        <div class="chips">${chips.join('')}</div>
+        ${s.levelUp ? `<p class="levelup">Level up! You're now Lv ${s.levelUp.n} · ${s.levelUp.h} (${esc(s.levelUp.p)}, ${esc(s.levelUp.m)})</p>` : ''}
+        ${s.badges.map((b) => `<p class="new-badge"><span>${b.icon}</span> New badge: <b>${esc(b.name)}</b></p>`).join('')}
         <div class="row">
           ${done ? continueLink() : ''}
           <button class="btn ghost" data-action="home">Home</button>
         </div>
-      </section></main>`;
+      </section>
+      ${levelCard()}</main>`;
   }
 
   function appPicker(done) {
@@ -750,6 +935,7 @@
             <input type="number" name="newPerDay" min="${MIN_NEW_PER_DAY}" max="30" value="${state.settings.newPerDay}">
             <small>Minimum ${MIN_NEW_PER_DAY}. Nice try.</small>
           </label>
+          <label class="check"><input type="checkbox" name="sound" ${state.settings.sound ? 'checked' : ''}> Sound effects</label>
           ${NATIVE ? appPicker(done) : `<label>Blocked sites (one per line)
             <textarea name="blocklist" rows="8" ${done ? '' : 'disabled'}>${esc(state.settings.blocklist.join('\n'))}</textarea>
             <small>${
@@ -802,6 +988,11 @@
       if (test) testAnswer(el.dataset.id);
     },
     practice: startPractice,
+    badge(el) {
+      const b = BADGES.find((x) => x.id === el.dataset.id);
+      const on = state.badges[b.id];
+      Fun.toast(`${on ? b.icon : '🔒'} <b>${esc(b.name)}</b> · ${esc(b.how)}${on ? ' ✓' : ''}`);
+    },
     async install() {
       if (!installEvt) return;
       const evt = installEvt;
@@ -859,6 +1050,7 @@
       const data = new FormData(form);
       const n = Math.round(Number(data.get('newPerDay')));
       state.settings.newPerDay = Math.min(30, Math.max(MIN_NEW_PER_DAY, n || MIN_NEW_PER_DAY));
+      state.settings.sound = data.has('sound');
       if (NATIVE && isDoneToday(state)) NATIVE.setBlockedApps(JSON.stringify(data.getAll('app')));
       if (isDoneToday(state) && data.has('blocklist')) {
         state.settings.blocklist = String(data.get('blocklist'))

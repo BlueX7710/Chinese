@@ -9,6 +9,10 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 - `docs/` is the website and the only copy of the lesson code: `index.html`, `app.js` (all app
   logic, no framework, no build step), `words.js` (vocabulary), `styles.css`, `shared.js` (helpers
   shared with the extension). GitHub Pages serves `docs/` from `main`.
+- `docs/fun.js` holds the cheerful layer (`window.Fun`): Bao the panda SVG, synthesized sound
+  effects, confetti and toasts. XP, levels, combos and badges live in `app.js` and are saved in
+  `state` (`xp`, `bestCombo`, `perfectLessons`, `badges`). A new web file must also be added to
+  `FILES` in `docs/sw.js` and to `copyWeb` in `android-app/app/build.gradle`.
 - `docs/` is also the Chrome extension: `manifest.json` and `background.js` (redirects blocked sites).
 - `android-app/` wraps `docs/` in a WebView. Gradle copies the web files into the APK at build
   time, so there's nothing to sync by hand. The Java side, exposed to JavaScript as
@@ -27,6 +31,8 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 - Word frequency tiers (`f` in `words.js`) come from the OpenSubtitles list. Single characters it
   undercounts because of word segmentation (numbers, 几) are corrected by hand. Don't recompute
   them naively.
+- The tone is cheerful, never shaming: wrong answers get 加油! and a sad Bao, not a scolding.
+  All motion respects `prefers-reduced-motion`.
 - The "forcing" rules are features, not bugs: no skip button, minimum 3 new words a day, the block
   list locked until the lesson is done, reset only by typing 我放弃.
 - If you change `docs/sw.js` or any file it caches, bump `CACHE` so installed apps update.
@@ -34,7 +40,8 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 
 ## Where things stand (October 2026)
 
-- Website, placement test, frequency labels, Chrome extension and Android app are all built.
+- Website, placement test, frequency labels, XP/levels/badges with Bao the panda, Chrome extension
+  and Android app are all built.
   `tools/smoke.js` passes.
 - Never tested on real hardware: the Android app (blocker, reminder, voice) and the iPhone
   Shortcuts setup.

@@ -12,7 +12,8 @@ A Chinese app that makes you learn: your distracting apps and websites stay bloc
 - **Placement test**: on first launch, a 2-minute test (or "I'm a total beginner"). It asks two words from each block of 15, gets harder as it goes and stops at your level. Words you know skip the beginner lessons but come back in reviews over the next week to make sure. Retake it any time in Settings; it only ever adds words.
 - **How common each word is**: every word shows ●●● *Very common*, ●●○ *Common* or ●○○ *Less common*, from how often it appears in Chinese film and TV subtitles ([OpenSubtitles frequency list](https://github.com/hermitdave/FrequencyWords)). 23 words also have a usage note when the textbook word isn't what people say, e.g. 汉语 → people usually say 中文.
 - **Vocabulary**: all 150 HSK 1 words, in a beginner-friendly order.
-- **Streaks**: a day streak, a 4-week calendar, and a message telling you your streak is dead when you miss a day. The Android app also sends a 7 pm reminder.
+- **Fun on purpose**: Bao the panda greets you in Chinese, cheers when you're right and encourages you when you're not. Right answers earn XP, with a bonus for several in a row, and you level up through Chinese titles (新手 Newcomer → 学生 Student → … → 龙 Dragon). There are 11 badges to collect, sound effects (can be turned off in Settings) and confetti when you finish. Praise comes in real Chinese phrases like 太棒了! and 加油!, so even the feedback teaches.
+- **Streaks**: a day streak and a 4-week calendar. Miss a day and Bao tells you he missed you and your streak restarts. The Android app also sends a 7 pm reminder.
 - **Giving up takes effort**: resetting your progress means typing 我放弃 ("I give up") in Chinese.
 
 Progress is stored only on your own device, separately for each app and browser.
@@ -38,7 +39,7 @@ Opening a locked app now sends you to the lesson. When you finish, tap **Unlock 
 
 | Folder | What's in it |
 | --- | --- |
-| `docs/` | The web app, served by GitHub Pages: `index.html`, `app.js`, `words.js` (the vocabulary), `styles.css`, the manifest, offline service worker and icons. It's also the Chrome extension (`manifest.json`, `background.js`). |
+| `docs/` | The web app, served by GitHub Pages: `index.html`, `app.js`, `fun.js` (mascot, sounds, confetti), `words.js` (the vocabulary), `styles.css`, the manifest, offline service worker and icons. It's also the Chrome extension (`manifest.json`, `background.js`). |
 | `android-app/` | The Android app: a WebView around `docs/` (copied in at build time) plus the app blocker, reminder and Chinese voice in Java. |
 | `.github/workflows/` | `android.yml` builds the APK and zips the Chrome extension on every push to `main`, and publishes both to Releases. |
 | `tools/` | `smoke.js` tests the app in a browser (lesson, placement test, phone layout and the Android flow). |
