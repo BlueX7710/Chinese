@@ -29,6 +29,10 @@
   let session = null; // active lesson, or null on the home/settings screens
   let test = null; // active placement test
   let testResult = null;
+  let exam = null; // active HSK mock test
+  let examTimer = null;
+  let examResult = null;
+  const busy = () => !!(session || test || exam); // mid-lesson or mid-test: don't redraw underneath
   let barPct = 0; // where the lesson progress bar last stood, so it can animate
 
   // Installing: Chrome/Edge/Android fire beforeinstallprompt; iPhone Safari needs the Share sheet.
@@ -69,6 +73,7 @@
       bestCombo: 0,
       perfectLessons: 0,
       badges: {}, // badge id -> date earned
+      exams: [], // last HSK mock tests: { date, score, max, passed }
     };
   }
 
@@ -235,6 +240,7 @@
     { id: 'words50', icon: '📚', name: '50 words', how: 'Learn 50 words', test: () => wordsSeen() >= 50 },
     { id: 'words100', icon: '🎓', name: '100 words', how: 'Learn 100 words', test: () => wordsSeen() >= 100 },
     { id: 'master10', icon: '🧠', name: 'Long memory', how: 'Master 10 words', test: () => wordsMastered() >= 10 },
+    { id: 'hskpass', icon: '📝', name: 'HSK ready', how: 'Pass an HSK 1 mock test', test: () => state.exams.some((e) => e.passed) },
     { id: 'hsk1', icon: '🐉', name: 'HSK 1 hero', how: `Learn all ${WORDS.length} words`, test: () => wordsSeen() >= WORDS.length },
   ];
 
@@ -401,9 +407,10 @@
     return shuffle([word, ...others]);
   }
 
-  function answer(correct, given) {
+  // `skipped` means the learner tapped "I don't know": wrong for scheduling, but no scolding.
+  function answer(correct, given, skipped = false) {
     const { id, type } = session.current;
-    session.answer = { correct, given };
+    session.answer = { correct, given, skipped };
     session.done++;
     state.stats.answered++;
     if (correct) state.stats.correct++;
@@ -423,7 +430,7 @@
       play(session.answer.levelUp ? 'level' : 'correct');
     } else {
       session.combo = 0;
-      play('wrong');
+      if (!skipped) play('wrong');
       if (session.mode === 'daily' && !session.failed.has(id)) {
         const c = state.cards[id];
         c.lapses++;
@@ -528,13 +535,99 @@
     render();
   }
 
+  // ---------- HSK mock test ----------
+
+  const EXAM_SECONDS_PER_QUESTION = 30;
+  const EXAM_PASS = 0.6; // the real HSK 1 passes at 120 of 200
+
+  const clock = (ms) => {
+    const sec = Math.ceil(ms / 1000);
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  };
+
+  // Words come from the whole list, learned or not. Half listening, half reading when the
+  // device has a Chinese voice; reading only when it doesn't.
+  function startExam(count) {
+    const listening = canSpeak() ? count / 2 : 0;
+    const questions = shuffle(WORDS)
+      .slice(0, count)
+      .map((w, i) => {
+        const section = i < listening ? 'listening' : 'reading';
+        const type = section === 'listening' ? pick(['listenMeaning', 'listen']) : pick(['meaning', 'hanzi', 'pinyinPick']);
+        // buildOptions('listen') picks words that sound different, which is what pinyin choices need too.
+        const optionsLike = type === 'listenMeaning' ? 'meaning' : type === 'pinyinPick' ? 'listen' : type;
+        return { id: w.h, section, type, options: buildOptions(w.h, optionsLike), given: null };
+      });
+    exam = { questions, i: 0, ends: Date.now() + count * EXAM_SECONDS_PER_QUESTION * 1000 };
+    clearInterval(examTimer);
+    examTimer = setInterval(tickExam, 500);
+    showExamQuestion();
+  }
+
+  function showExamQuestion() {
+    const q = exam.questions[exam.i];
+    if (q.section === 'listening') speak(q.id);
+    render();
+  }
+
+  function tickExam() {
+    if (!exam) return clearInterval(examTimer);
+    const left = Math.max(0, exam.ends - Date.now());
+    const el = document.getElementById('clock');
+    if (el) el.textContent = clock(left);
+    if (!left) finishExam();
+  }
+
+  function examAnswer(givenId) {
+    exam.questions[exam.i].given = givenId;
+    exam.i++;
+    if (exam.i >= exam.questions.length) return finishExam();
+    showExamQuestion();
+  }
+
+  function finishExam() {
+    clearInterval(examTimer);
+    const sections = {};
+    for (const q of exam.questions) {
+      const sec = sections[q.section] || (sections[q.section] = { right: 0, total: 0 });
+      sec.total++;
+      if (q.given === q.id) sec.right++;
+    }
+    // Like the real HSK, each section is worth 100 points. Unanswered questions score nothing.
+    let score = 0;
+    let max = 0;
+    for (const sec of Object.values(sections)) {
+      sec.score = Math.round((100 * sec.right) / sec.total);
+      score += sec.score;
+      max += 100;
+    }
+    const missed = exam.questions.filter((q) => q.given !== q.id).map((q) => q.id);
+    const xp = (exam.questions.length - missed.length) * 5;
+    const passed = score >= EXAM_PASS * max;
+    state.xp += xp;
+    state.exams = [...state.exams, { date: today(), score, max, passed }].slice(-10);
+    examResult = { sections, score, max, passed, xp, missed, timedOut: exam.i < exam.questions.length, badges: awardBadges() };
+    exam = null;
+    save();
+    view = 'examResult';
+    render();
+    if (passed) {
+      play('complete');
+      Fun.confetti();
+    }
+  }
+
   // ---------- rendering ----------
 
   function render() {
     if (NATIVE && isDoneToday(state)) NATIVE.lessonDone(today());
     if (session) return renderSession();
     if (test) return renderTest();
+    if (exam) return renderExam();
     if (view === 'testResult') return renderTestResult();
+    if (view === 'exam') return renderExamIntro();
+    if (view === 'examResult') return renderExamResult();
+    if (view === 'progress') return renderProgress();
     if (view === 'settings') return renderSettings();
     if (view === 'summary') return renderSummary();
     renderHome();
@@ -551,6 +644,45 @@
           <div class="streak ${s ? '' : 'cold'}" title="Day streak">🔥 ${s}</div>
         </div>
       </header>`;
+  }
+
+  const ICONS = {
+    home: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
+    exam: '<path d="M8 4h8a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m9 13 2 2 4-5"/>',
+    progress: '<path d="M5 20v-7M12 20V5M19 20v-10"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+  };
+  const TABS = [['home', 'Learn'], ['exam', 'Test'], ['progress', 'Progress'], ['settings', 'Settings']];
+
+  // The bottom tab bar. Hidden during lessons and tests so there's nothing to wander off to.
+  function nav() {
+    const here = view === 'examResult' ? 'exam' : view === 'summary' || view === 'testResult' ? 'home' : view;
+    const tabs = TABS.map(
+      ([id, label]) => `<button class="${here === id ? 'on' : ''}" data-action="go" data-view="${id}">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg>
+        <span>${label}</span>${id === 'home' && !isDoneToday(state) ? '<i class="dot"></i>' : ''}
+      </button>`
+    ).join('');
+    return `<nav class="tabs"><div>${tabs}</div></nav>`;
+  }
+
+  // Monday to Sunday of this week, labelled the Chinese way: 一 二 三 四 五 六 日.
+  function weekStrip() {
+    const t = today();
+    const dow = (new Date().getDay() + 6) % 7;
+    const days = new Set(state.completedDays);
+    const cells = ['一', '二', '三', '四', '五', '六', '日']
+      .map((name, i) => {
+        const d = addDays(t, i - dow);
+        const cls = days.has(d) ? 'done' : d === t ? 'now' : i > dow ? 'later' : 'missed';
+        return `<div class="wd ${cls}" title="${d}">${days.has(d) ? '✓' : name}</div>`;
+      })
+      .join('');
+    const s = streak();
+    return `<section class="week">
+        <div class="week-head"><b>This week</b><span>${s ? `🔥 ${s}-day streak` : 'Start a streak today'}</span></div>
+        <div class="week-days">${cells}</div>
+      </section>`;
   }
 
   function continueLink() {
@@ -647,7 +779,7 @@
     let main;
     if (done) {
       main = `
-        <section class="card ok">
+        <section class="card ok hero done">
           ${bao('love', ['明天见!', 'míngtiān jiàn', 'See you tomorrow!'], 'You did it. Go enjoy your day.')}
           <h1>Today's lesson is done.</h1>
           <p>${streak() > 1 ? `That's ${streak()} days in a row. ` : ''}Your words will be waiting tomorrow.</p>
@@ -661,7 +793,7 @@
       if (r.reviews) parts.push(`<b>${r.reviews}</b> review${r.reviews === 1 ? '' : 's'}`);
       if (r.fresh) parts.push(`<b>${r.fresh}</b> new word${r.fresh === 1 ? '' : 's'}`);
       main = `
-        <section class="card owe">
+        <section class="card owe hero">
           ${iosGate ? '<p class="blocked">🔒 Your apps unlock as soon as you finish today\'s Chinese.</p>' : ''}
           ${blockedApp ? `<p class="blocked">🔒 <b>${esc(blockedApp.name)}</b> is locked until you finish today's Chinese. It only takes a few minutes!</p>` : ''}
           ${fromUrl ? `<p class="blocked">🔒 <b>${esc(safeHost(fromUrl))}</b> is locked until you finish today's Chinese. It only takes a few minutes!</p>` : ''}
@@ -694,14 +826,22 @@
       ? ''
       : `<section class="card offer">
           <h2>Know some Chinese already?</h2>
-          <p>Take a 2-minute placement test and skip the words you know.</p>
+          <p>A 2-minute placement test lets you skip the words you know.</p>
           <div class="row">
             <button class="btn primary" data-action="test">Take the test</button>
             <button class="btn ghost" data-action="skipTest">I'm a total beginner</button>
           </div>
         </section>`;
-    $app.innerHTML = `${header()}<main>${blockerOff}${offer}${main}${statsBlock()}</main>
-      <footer>${installHelp()}<button class="link" data-action="settings">Settings</button></footer>`;
+    $app.innerHTML = `${header()}<main>${blockerOff}${main}${offer}${weekStrip()}${levelCard()}${installHelp()}</main>${nav()}`;
+  }
+
+  function renderProgress() {
+    const best = state.exams.reduce((b, e) => (!b || e.score / e.max > b.score / b.max ? e : b), null);
+    $app.innerHTML = `${header()}<main>
+      <h1 class="page-title">Progress</h1>
+      ${statsBlock()}
+      ${best ? `<p class="label">HSK 1 mock test</p><section class="card slim">Best score <b>${best.score} / ${best.max}</b> ${best.passed ? '· passed ✓' : '· not passed yet'}</section>` : ''}
+    </main>${nav()}`;
   }
 
   function safeHost(url) {
@@ -740,6 +880,7 @@
     const w = BY_ID[id];
     const a = session.answer;
     const pct = Math.round((100 * session.done) / Math.max(1, session.total));
+    const idk = a ? '' : '<button type="button" class="link idk-link" data-action="dontKnow">I don\'t know</button>';
     let body = '';
 
     if (type === 'intro') {
@@ -762,7 +903,8 @@
             placeholder="e.g. ni3 hao3" ${a ? 'disabled' : ''} value="${a ? esc(a.given) : ''}">
           ${a ? '' : '<button class="btn primary">Check</button>'}
         </form>
-        <p class="hint">Use tone numbers 1–4 after each syllable (or tone marks). Tones count.</p>`;
+        <p class="hint">Use tone numbers 1–4 after each syllable (or tone marks). Tones count.</p>
+        ${idk}`;
     } else {
       let prompt;
       if (type === 'meaning') prompt = `<p class="label">What does this mean?</p><div class="hanzi">${w.h}</div>`;
@@ -782,7 +924,7 @@
             <kbd>${i + 1}</kbd>${label}</button>`;
         })
         .join('');
-      body = `${prompt}<div class="opts ${type === 'meaning' ? '' : 'grid'}">${opts}</div>`;
+      body = `${prompt}<div class="opts ${type === 'meaning' ? '' : 'grid'}">${opts}</div>${idk}`;
     }
 
     const verdict = a
@@ -790,12 +932,15 @@
         ? `<p class="verdict"><span class="hanzi-inline">${a.praise[0]}</span> <small>${esc(a.praise[1])} · ${esc(a.praise[2])}</small></p>
            <p class="gain"><span>⭐ +${a.gain} XP</span>${a.combo >= 2 ? `<span class="combo">🔥 ${a.combo} in a row</span>` : ''}</p>
            ${a.levelUp ? `<p class="levelup">Level up! You're now Lv ${a.levelUp.n} · ${a.levelUp.h} (${esc(a.levelUp.m)})</p>` : ''}`
-        : `<p class="verdict"><span class="hanzi-inline">加油!</span> <small>jiā yóu · Keep going!</small></p>
-           <p class="gain">Not quite. This one comes back until you've got it.</p>`
+        : a.skipped
+          ? `<p class="verdict"><span class="hanzi-inline">没关系!</span> <small>méi guānxi · No worries!</small></p>
+             <p class="gain">Here's the answer. It comes back later so you can learn it.</p>`
+          : `<p class="verdict"><span class="hanzi-inline">加油!</span> <small>jiā yóu · Keep going!</small></p>
+             <p class="gain">Not quite. This one comes back until you've got it.</p>`
       : '';
     const feedback = a
       ? `<div class="feedback ${a.correct ? 'good' : 'bad'}">
-          <div class="fb-head"><div>${verdict}</div>${Fun.panda(a.correct ? 'cheer' : 'sad', 60)}</div>
+          <div class="fb-head"><div>${verdict}</div>${Fun.panda(a.correct ? 'cheer' : a.skipped ? 'happy' : 'sad', 60)}</div>
           ${wordReveal(w)}
           <button class="btn primary" data-action="next" id="cont">Continue</button>
         </div>`
@@ -868,6 +1013,105 @@
       </main>`;
   }
 
+  function renderExamIntro() {
+    const history = [...state.exams].reverse();
+    $app.innerHTML = `${header()}<main>
+      <h1 class="page-title">Test yourself</h1>
+      <section class="card">
+        <div class="card-head">${Fun.panda('happy', 64)}<div><h2>HSK 1 mock test</h2>
+          <p>Words from the whole HSK 1 list, including ones you haven't learned yet. No hints, and no answers until the end.</p></div></div>
+        <ul class="facts">
+          <li>${canSpeak() ? 'Half listening, half reading' : 'Reading only (this device has no Chinese voice)'}</li>
+          <li>${EXAM_SECONDS_PER_QUESTION} seconds per question on average</li>
+          <li>Pass mark ${EXAM_PASS * 100}%, like the real exam</li>
+        </ul>
+        <div class="row">
+          <button class="btn primary" data-action="exam" data-count="20">Quick test · 20 questions</button>
+          <button class="btn ghost" data-action="exam" data-count="40">Full test · 40 questions</button>
+        </div>
+        <small class="fine">The real HSK 1 also uses short sentences. This checks how well you know the words, and doesn't count as your daily lesson.</small>
+      </section>
+      ${
+        history.length
+          ? `<p class="label">Your results</p><section class="card list">${history
+              .map((e) => `<div class="list-row"><span>${e.date}</span><b>${e.score} / ${e.max}</b><span class="${e.passed ? 'pass' : 'fail'}">${e.passed ? 'Passed' : 'Not yet'}</span></div>`)
+              .join('')}</section>`
+          : ''
+      }
+      <p class="label">Placement test</p>
+      <section class="card">
+        <p>${state.placement && state.placement.date ? `Last taken ${state.placement.date}. ` : ''}Already know some words? This finds your level and skips the ones you know. It only ever adds words.</p>
+        <button class="btn ghost" data-action="test">${state.placement && state.placement.date ? 'Retake' : 'Take'} the placement test</button>
+      </section>
+    </main>${nav()}`;
+  }
+
+  const EXAM_PROMPTS = {
+    listenMeaning: 'Listening · What does it mean?',
+    listen: 'Listening · Which one did you hear?',
+    meaning: 'Reading · What does this mean?',
+    hanzi: 'Reading · Which one means…',
+    pinyinPick: 'Reading · How do you say this?',
+  };
+
+  function renderExam() {
+    const q = exam.questions[exam.i];
+    const w = BY_ID[q.id];
+    const total = exam.questions.length;
+    const shows = q.section === 'listening'
+      ? `<button class="btn speaker" data-action="speak" data-text="${esc(w.h)}">🔊</button>`
+      : q.type === 'hanzi'
+        ? `<div class="meaning xl">${esc(w.m)}</div>`
+        : `<div class="hanzi">${w.h}</div>`;
+    const label = (o) =>
+      q.type === 'meaning' || q.type === 'listenMeaning'
+        ? esc(o.m)
+        : q.type === 'pinyinPick'
+          ? `<span class="pinyin lg">${esc(o.p)}</span>`
+          : `<span class="hanzi opt">${o.h}</span>`;
+    const opts = q.options
+      .map((o, i) => `<button class="opt-btn" data-action="examChoose" data-id="${esc(o.h)}"><kbd>${i + 1}</kbd>${label(o)}</button>`)
+      .join('');
+    $app.innerHTML = `
+      ${header()}
+      <div class="exam-bar"><span>Question ${exam.i + 1} of ${total}</span><span class="clock">⏱ <b id="clock">${clock(exam.ends - Date.now())}</b></span></div>
+      <div class="progress"><div style="width:${Math.round((100 * exam.i) / total)}%"></div></div>
+      <main class="lesson enter">
+        <p class="label">${EXAM_PROMPTS[q.type]}</p>
+        ${shows}
+        <div class="opts ${q.type === 'hanzi' || q.type === 'listen' ? 'grid' : ''}">${opts}</div>
+        <button class="link idk-link" data-action="examChoose" data-id="">I don't know</button>
+      </main>`;
+  }
+
+  function renderExamResult() {
+    const r = examResult;
+    const rows = Object.entries(r.sections)
+      .map(([name, sec]) => `<div class="list-row"><span>${name === 'listening' ? '🎧 Listening' : '📖 Reading'}</span><span>${sec.right} of ${sec.total} right</span><b>${sec.score} / 100</b></div>`)
+      .join('');
+    const missed = r.missed
+      .map((id) => BY_ID[id])
+      .map((w) => `<div class="list-row"><b class="hanzi-inline">${w.h}</b><span class="pinyin">${esc(w.p)}</span><span>${esc(w.m)}</span></div>`)
+      .join('');
+    $app.innerHTML = `${header()}<main>
+      <section class="card ok celebrate">
+        ${Fun.panda(r.passed ? 'love' : 'happy', 112)}
+        <p class="praise">${r.passed ? '<b class="hanzi-inline">通过了!</b> <small>tōngguò le · You passed!</small>' : '<b class="hanzi-inline">加油!</b> <small>jiā yóu · Keep going!</small>'}</p>
+        <h1 class="score">${r.score} <small>/ ${r.max}</small></h1>
+        <p>${r.passed ? 'That would pass.' : `Not yet. The pass mark is ${EXAM_PASS * r.max}.`}${r.timedOut ? ' Time ran out before the last questions.' : ''}</p>
+        <div class="chips"><span>⭐ +${r.xp} XP</span></div>
+        ${r.badges.map((b) => `<p class="new-badge"><span>${b.icon}</span> New badge: <b>${esc(b.name)}</b></p>`).join('')}
+        <div class="row">
+          <button class="btn primary" data-action="go" data-view="exam">Try again</button>
+          <button class="btn ghost" data-action="home">Home</button>
+        </div>
+      </section>
+      <p class="label">By section</p>
+      <section class="card list">${rows}</section>
+      ${missed ? `<p class="label">Words to work on · ${r.missed.length}</p><section class="card list words">${missed}</section>` : ''}
+    </main>${nav()}`;
+  }
+
   function renderTestResult() {
     const r = testResult;
     const next = r.nextWord ? BY_ID[r.nextWord] : null;
@@ -906,7 +1150,7 @@
           <button class="btn ghost" data-action="home">Home</button>
         </div>
       </section>
-      ${levelCard()}</main>`;
+      ${levelCard()}</main>${nav()}`;
   }
 
   function appPicker(done) {
@@ -934,8 +1178,8 @@
   function renderSettings() {
     const done = isDoneToday(state);
     $app.innerHTML = `${header()}<main>
+      <h1 class="page-title">Settings</h1>
       <section class="card">
-        <h1>Settings</h1>
         <form data-form="settings" class="settings">
           <label>New words per day
             <input type="number" name="newPerDay" min="${MIN_NEW_PER_DAY}" max="30" value="${state.settings.newPerDay}">
@@ -955,10 +1199,6 @@
           <button class="btn primary">Save</button>
         </form>
         <hr>
-        <h2>Placement test</h2>
-        <p>${state.placement && state.placement.date ? `Last taken ${state.placement.date}. ` : ''}Retaking only adds words you know. It never removes progress.</p>
-        <button class="btn ghost" data-action="test">${state.placement && state.placement.date ? 'Retake' : 'Take'} the placement test</button>
-        <hr>
         <h2>Pronunciation</h2>
         <p>${canSpeak() ? `Using voice: ${esc(voiceName())}` : 'No Chinese voice found on this device, so listening exercises are off. Install a Chinese (zh-CN) text-to-speech voice in your OS settings.'}</p>
         ${canSpeak() ? '<button class="btn ghost" data-action="speak" data-text="你好，我们开始学习汉语吧">🔊 Test voice</button>' : ''}
@@ -969,7 +1209,7 @@
           <input name="phrase" autocomplete="off" placeholder="${GIVE_UP_PHRASE}">
           <button class="btn danger">Reset</button>
         </form>
-      </section></main>`;
+      </section></main>${nav()}`;
   }
 
   // ---------- events ----------
@@ -992,6 +1232,20 @@
     },
     testChoose(el) {
       if (test) testAnswer(el.dataset.id);
+    },
+    go(el) {
+      view = el.dataset.view;
+      render();
+      window.scrollTo(0, 0);
+    },
+    exam(el) {
+      startExam(Number(el.dataset.count));
+    },
+    examChoose(el) {
+      if (exam) examAnswer(el.dataset.id);
+    },
+    dontKnow() {
+      if (session && !session.answer && session.current.type !== 'intro') answer(false, '', true);
     },
     practice: startPractice,
     badge(el) {
@@ -1087,6 +1341,11 @@
       if (btn) btn.click();
       return;
     }
+    if (exam && /^[1-4]$/.test(e.key)) {
+      const btn = $app.querySelectorAll('.opt-btn[data-action="examChoose"]')[Number(e.key) - 1];
+      if (btn) btn.click();
+      return;
+    }
     if (!session) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (!session.answer && /^[1-4]$/.test(e.key) && tag !== 'INPUT') {
@@ -1119,11 +1378,11 @@
     // These can fire before saved progress has loaded, hence the state checks.
     window.onNativeVoice = () => state && render();
     window.onNativeResume = () => {
-      if (state && !session && !test) render();
+      if (state && !busy()) render();
     };
     window.onNativeBlocked = (pkg, name) => {
       blockedApp = { pkg, name };
-      if (state && !session && !test) {
+      if (state && !busy()) {
         view = 'home';
         render();
       }
@@ -1134,11 +1393,11 @@
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       installEvt = e;
-      if (state && !session && !test) render();
+      if (state && !busy()) render();
     });
     window.addEventListener('appinstalled', () => {
       installEvt = null;
-      if (state && !session && !test) render();
+      if (state && !busy()) render();
     });
   }
 

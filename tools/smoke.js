@@ -1,5 +1,5 @@
-// Smoke test: opens 汉字 Every Day in Chromium, does a full daily lesson (with one wrong answer),
-// takes the placement test, checks the phone layout has no sideways scroll, and runs the Android
+// Smoke test: opens 汉字 Every Day in Chromium, does a full daily lesson (using "I don't know" once),
+// passes an HSK mock test, takes the placement test, checks the phone layout has no sideways scroll, and runs the Android
 // app's flow against a fake native bridge. Fails on any page error.
 //   npx serve -l 5180 docs &
 //   node tools/smoke.js http://localhost:5180/
@@ -55,7 +55,7 @@ function fakeAndroid() {
     return p;
   }
 
-  // Answers whatever exercise is on screen. Gets the first multiple-choice question wrong on purpose.
+  // Answers whatever exercise is on screen. Taps "I don't know" on the first multiple-choice question.
   async function doLesson(p) {
     let wrongDone = false;
     for (let i = 0; i < 120; i++) {
@@ -75,10 +75,13 @@ function fakeAndroid() {
         : label.startsWith('Which one did you hear')
           ? await p.evaluate(() => window.__spoken)
           : await p.evaluate((m) => WORDS.find((w) => w.m === m).h, await p.textContent('.meaning.xl'));
-      const ids = await p.$$eval('[data-action=choose]', (b) => b.map((x) => x.dataset.id));
-      const pick = wrongDone ? correct : ids.find((id) => id !== correct);
-      wrongDone = true;
-      await p.click(`[data-action=choose][data-id="${pick}"]`);
+      if (!wrongDone) {
+        wrongDone = true;
+        await p.click('[data-action=dontKnow]');
+        if (!/No worries/.test(await p.textContent('.feedback'))) fail('"I don\'t know" did not show the answer kindly');
+        continue;
+      }
+      await p.click(`[data-action=choose][data-id="${correct}"]`);
     }
     fail('lesson did not finish');
   }
@@ -96,9 +99,31 @@ function fakeAndroid() {
   if (!/New badge: First steps/.test(summary)) fail('first-lesson badge not awarded');
   await p.click('[data-action=home]');
   if (!/Today's lesson is done/.test(await p.textContent('main'))) fail('home does not show the lesson as done');
-  if (!(await p.$('.badge.on'))) fail('home shows no earned badge');
+  if (!(await p.$('.week .wd.done'))) fail('this week does not show today as done');
+  await p.click('[data-view=progress]');
+  if (!(await p.$('.badge.on'))) fail('Progress shows no earned badge');
   const xp = await p.evaluate(() => JSON.parse(localStorage.state).xp);
   if (!(xp >= 150)) fail(`expected at least 150 XP after a first lesson, got ${xp}`);
+
+  // 1b. HSK mock test: answer all 20 correctly (reading only, since a test browser has no voice).
+  await p.click('[data-view=exam]');
+  await p.click('[data-action=exam][data-count="20"]');
+  for (let i = 0; i < 20; i++) {
+    const label = await p.textContent('.lesson .label');
+    const id = /Which one means/.test(label)
+      ? await p.evaluate((m) => WORDS.find((w) => w.m === m).h, await p.textContent('.meaning.xl'))
+      : await p.textContent('.lesson .hanzi');
+    await p.click(`.opt-btn[data-action=examChoose][data-id="${id}"]`);
+  }
+  const result = await p.textContent('main');
+  if (!/100\s*\/ 100/.test(result) || !/You passed/.test(result)) fail('HSK test: perfect run not scored 100 / 100: ' + result.replace(/\s+/g, ' ').slice(0, 120));
+  if (!/New badge: HSK ready/.test(result)) fail('HSK test: no badge for passing');
+  // and a run of "I don't know" fails it
+  await p.click('[data-view=exam]');
+  await p.click('[data-action=exam][data-count="20"]');
+  for (let i = 0; i < 20; i++) await p.click('.idk-link');
+  if (!/Not yet/.test(await p.textContent('main'))) fail('HSK test: all "I don\'t know" should not pass');
+  if ((await p.evaluate(() => JSON.parse(localStorage.state).exams.length)) !== 2) fail('HSK test: results not saved');
 
   // 2. Phone: placement test for someone who knows exactly the first 60 words.
   p = await open({ ...devices['iPhone 13'] });
@@ -135,7 +160,7 @@ function fakeAndroid() {
   await doLesson(p);
   await p.click('[data-action=openApp]');
   await p.click('[data-action=home]');
-  await p.click('[data-action=settings]');
+  await p.click('[data-view=settings]');
   await p.uncheck('input[value="com.google.android.youtube"]');
   await p.check('input[value="com.whatsapp"]');
   await p.click('form[data-form=settings] .btn.primary');

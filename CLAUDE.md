@@ -42,7 +42,9 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 
 ## Where things stand (October 2026)
 
-- Website, placement test, frequency labels, XP/levels/badges with Bao the panda, Chrome extension
+- Website with four tabs (`view`: home, exam, progress, settings; the tab bar is hidden while
+  `busy()`), HSK 1 mock test (`exam`, results in `state.exams`), "I don't know" on every question,
+  placement test, frequency labels, XP/levels/badges with Bao the panda, Chrome extension
   and Android app are all built.
   `tools/smoke.js` passes.
 - Never tested on real hardware: the Android app (blocker, reminder, voice) and the iPhone
