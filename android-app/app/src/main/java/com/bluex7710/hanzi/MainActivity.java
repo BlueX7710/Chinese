@@ -13,10 +13,9 @@ import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
 
-/** Hosts the lesson web app (bundled in assets/www) in a WebView. */
+/** Hosts the lesson web app in a WebView. Updater decides which copy of it to load. */
 public class MainActivity extends Activity {
     static final String EXTRA_BLOCKED = "blockedPackage";
-    private static final String START_URL = "file:///android_asset/www/index.html";
 
     private WebView web;
     private NativeBridge bridge;
@@ -31,6 +30,7 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(true); // the web app runs from files in the app's private storage
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         bridge = new NativeBridge(this, web);
         web.addJavascriptInterface(bridge, "HanziNative");
 
-        String url = START_URL;
+        String url = Updater.startUrl(this);
         String pkg = getIntent().getStringExtra(EXTRA_BLOCKED);
         if (pkg != null) {
             url += "?app=" + Uri.encode(pkg) + "&appName=" + Uri.encode(NativeBridge.labelFor(this, pkg));
@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
 
         ReminderReceiver.schedule(this);
         WatchService.start(this);
+        checkForUpdate();
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -73,7 +74,15 @@ public class MainActivity extends Activity {
         // Coming back from Android settings: start the blocker if it was just allowed, and refresh
         // the "app blocker is on/off" state.
         WatchService.start(this);
+        checkForUpdate();
         if (pageLoaded) web.evaluateJavascript("window.onNativeResume && onNativeResume()", null);
+    }
+
+    /** Fetches newer lessons from the website. The page reloads itself unless a lesson is in progress. */
+    private void checkForUpdate() {
+        Updater.checkInBackground(this, () -> runOnUiThread(() -> {
+            if (pageLoaded) web.evaluateJavascript("window.onNativeUpdate && onNativeUpdate()", null);
+        }));
     }
 
     @Override

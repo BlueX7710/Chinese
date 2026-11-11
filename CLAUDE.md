@@ -37,7 +37,12 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
   All motion respects `prefers-reduced-motion`.
 - The "forcing" rules are features, not bugs: no skip button, minimum 3 new words a day, the block
   list locked until the lesson is done, reset only by typing 我放弃.
-- If you change `docs/sw.js` or any file it caches, bump `CACHE` so installed apps update.
+- If you change `docs/sw.js` or any file it caches, bump `CACHE` so installed apps update. The
+  Android app depends on this too: `Updater.java` reads the number in `CACHE` as the version and
+  downloads the files in `FILES`, so every file the page loads must be listed there. The web app
+  runs from a `www` folder in the app's storage (bundled copy first, then downloads), so a push to
+  `main` reaches Android without a new APK. Only Java changes need a reinstall.
+- The service worker is network-first: online, the newest files load on the first open.
 - The Android signing key lives only in the repository secrets. Never commit a keystore or its password.
 
 ## Where things stand (October 2026)

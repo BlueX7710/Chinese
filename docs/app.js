@@ -1216,6 +1216,7 @@
 
   const actions = {
     home() {
+      if (updateWaiting) return location.reload(); // a new version arrived mid-lesson
       view = 'home';
       render();
     },
@@ -1401,8 +1402,19 @@
     });
   }
 
+  // Reload into a new version as soon as it is ready, but never in the middle of a lesson or test.
+  let updateWaiting = false;
+  function applyUpdate() {
+    updateWaiting = true;
+    if (state && !busy()) location.reload();
+  }
+  if (NATIVE) window.onNativeUpdate = applyUpdate;
+
   if (!IS_EXT && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    const hadWorker = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('sw.js').catch(() => {});
+    // A new service worker taking over means new files are cached. Not on the very first visit.
+    navigator.serviceWorker.addEventListener('controllerchange', () => hadWorker && applyUpdate());
   }
 
   load().then(render);

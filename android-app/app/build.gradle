@@ -50,7 +50,8 @@ android {
 // The lessons are the same web app as the site: copy it in from docs/ at build time.
 def copyWeb = tasks.register('copyWeb', Copy) {
     from(rootProject.file('../docs')) {
-        include 'index.html', 'app.js', 'fun.js', 'shared.js', 'words.js', 'styles.css', 'icon-*.png'
+        // sw.js is not run in the app; Updater reads the version number from it.
+        include 'index.html', 'app.js', 'fun.js', 'shared.js', 'words.js', 'styles.css', 'icon-*.png', 'sw.js'
     }
     into "$buildDir/generated/web/www"
 }
