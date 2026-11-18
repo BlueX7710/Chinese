@@ -62,7 +62,10 @@ function fakeAndroid() {
       if (await p.$('.card.ok')) return;
       if (await p.$('#cont')) { await p.click('#cont'); continue; }
       const label = await p.textContent('.lesson .label');
-      if (label.startsWith('New word')) { await p.click('[data-action=next]'); continue; }
+      if (label.startsWith('New word')) {
+        await p.click((await p.$('[data-action=reveal]')) ? '[data-action=reveal]' : '[data-action=next]');
+        continue;
+      }
       if (label.startsWith('Type the pinyin')) {
         const h = await p.textContent('.lesson .hanzi');
         const py = await p.evaluate((h) => WORDS.find((w) => w.h === h).p, h);
@@ -125,6 +128,19 @@ function fakeAndroid() {
   if (!/Not yet/.test(await p.textContent('main'))) fail('HSK test: all "I don\'t know" should not pass');
   if ((await p.evaluate(() => JSON.parse(localStorage.state).exams.length)) !== 2) fail('HSK test: results not saved');
 
+  // 1c. HSK level test for someone who knows HSK 1–3 but nothing harder: should say HSK 3.
+  await p.click('[data-view=exam]');
+  await p.click('[data-action=levelTest]');
+  while (await p.$('[data-action=ltChoose]')) {
+    const h = await p.textContent('.lesson .hanzi');
+    const level = Number((await p.textContent('.exam-bar span')).match(/HSK (\d)/)[1]);
+    await p.click(level <= 3 ? `.opt-btn[data-action=ltChoose][data-id="${h}"]` : '.idk-link');
+  }
+  const lvl = await p.textContent('main');
+  if (!/HSK 3/.test(await p.textContent('.score'))) fail('level test: expected HSK 3, got ' + (await p.textContent('.score')));
+  if (!/HSK 4\s*0 of 6 known\s*Not yet/.test(lvl.replace(/\s+/g, ' '))) fail('level test: did not stop at HSK 4');
+  if ((await p.evaluate(() => JSON.parse(localStorage.state).levelTests.at(-1).level)) !== 3) fail('level test: result not saved');
+
   // 2. Phone: placement test for someone who knows exactly the first 60 words.
   p = await open({ ...devices['iPhone 13'] });
   await p.goto(url);
@@ -141,6 +157,18 @@ function fakeAndroid() {
   await p.click('[data-action=start]');
   const first = await p.textContent('.lesson .hanzi');
   if (first !== '买') fail(`first new word after placement is ${first}, expected 买 (word 61)`);
+  if (!/Do you already know/.test(await p.textContent('main'))) fail('new word does not ask "do you already know it"');
+  // "I already know it": pass the quick check, the word is skipped and another new word takes its place.
+  await p.click('[data-action=knowIt]');
+  if (!/Quick check/.test(await p.textContent('.lesson .label'))) fail('"I already know it" did not ask a quick check');
+  await p.click('[data-action=choose][data-id="买"]');
+  if (!/Skipped/.test(await p.textContent('.feedback'))) fail('known word was not skipped');
+  const card = await p.evaluate(() => JSON.parse(localStorage.state).cards['买']);
+  if (card.interval !== 7) fail('known word not scheduled a week out');
+  await p.click('#cont');
+  const replacement = await p.textContent('.lesson .hanzi');
+  if (replacement === '买' || !/New word/.test(await p.textContent('.lesson .label'))) fail('no new word replaced the known one');
+  await p.click('[data-action=reveal]');
   if (!(await p.$('.freq'))) fail('new word card has no frequency label');
 
   // 3. Android app: blocked-app screen, lesson, then back to the blocked app and edit the block list.

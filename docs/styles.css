@@ -325,3 +325,19 @@ h1, h2 { line-height: 1.2; letter-spacing: -0.01em; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .bao .panda { width: 72px; height: 72px; }
 }
+
+/* "Do you already know this word?" */
+.ask { font-size: 18px; font-weight: 700; margin: 18px 0 12px; }
+.choice { display: grid; gap: 10px; max-width: 320px; margin: 0 auto; }
+.known-note { margin: 0 0 12px; font-size: 14px; }
+
+/* HSK level test */
+.ladder { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 4px; }
+.ladder i { font-style: normal; text-align: center; font-weight: 700; font-size: 13px; padding: 6px 0; border-radius: 10px; background: var(--line); color: var(--muted); }
+.ladder i.done { background: var(--good); color: #fff; }
+.ladder i.now { background: var(--accent); color: var(--accent-ink); }
+.eyebrow { margin: 6px 0 0 !important; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.level-card { border: 2px solid var(--gold); }
+.level-card .btn { width: 100%; margin-top: 4px; }
+.lvl-badge { flex: none; width: 64px; height: 64px; border-radius: 18px; background: var(--gold); color: #3d2b00; display: grid; place-items: center; font-size: 12px; font-weight: 800; line-height: 1; padding-top: 8px; box-shadow: 0 3px 0 var(--gold-deep); }
+.lvl-badge b { display: block; font-size: 26px; }

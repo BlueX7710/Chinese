@@ -29,10 +29,12 @@
   let session = null; // active lesson, or null on the home/settings screens
   let test = null; // active placement test
   let testResult = null;
+  let lt = null; // active HSK level test
+  let ltResult = null;
   let exam = null; // active HSK mock test
   let examTimer = null;
   let examResult = null;
-  const busy = () => !!(session || test || exam); // mid-lesson or mid-test: don't redraw underneath
+  const busy = () => !!(session || test || exam || lt); // mid-lesson or mid-test: don't redraw underneath
   let barPct = 0; // where the lesson progress bar last stood, so it can animate
 
   // Installing: Chrome/Edge/Android fire beforeinstallprompt; iPhone Safari needs the Share sheet.
@@ -74,6 +76,7 @@
       perfectLessons: 0,
       badges: {}, // badge id -> date earned
       exams: [], // last HSK mock tests: { date, score, max, passed }
+      levelTests: [], // HSK level test results: { date, level }
     };
   }
 
@@ -240,6 +243,7 @@
     { id: 'words50', icon: '📚', name: '50 words', how: 'Learn 50 words', test: () => wordsSeen() >= 50 },
     { id: 'words100', icon: '🎓', name: '100 words', how: 'Learn 100 words', test: () => wordsSeen() >= 100 },
     { id: 'master10', icon: '🧠', name: 'Long memory', how: 'Master 10 words', test: () => wordsMastered() >= 10 },
+    { id: 'hsk3', icon: '🏅', name: 'HSK 3 level', how: 'Reach HSK 3 in the level test', test: () => state.levelTests.some((t) => t.level >= 3) },
     { id: 'hskpass', icon: '📝', name: 'HSK ready', how: 'Pass an HSK 1 mock test', test: () => state.exams.some((e) => e.passed) },
     { id: 'hsk1', icon: '🐉', name: 'HSK 1 hero', how: `Learn all ${WORDS.length} words`, test: () => wordsSeen() >= WORDS.length },
   ];
@@ -416,8 +420,12 @@
     if (correct) state.stats.correct++;
 
     if (correct) {
-      session.need[id]--;
-      if (session.need[id] <= 0 && session.mode === 'daily') schedule(id, !session.failed.has(id));
+      if (session.current.prove) {
+        alreadyKnown(id);
+      } else {
+        session.need[id]--;
+        if (session.need[id] <= 0 && session.mode === 'daily') schedule(id, !session.failed.has(id));
+      }
       // XP: 10 per right answer, plus a little extra for each one in a row (up to +10).
       session.combo++;
       state.bestCombo = Math.max(state.bestCombo, session.combo);
@@ -446,6 +454,27 @@
     render();
   }
 
+  // The learner proved they know a new word: skip its lessons, check it again in a week, and bring in
+  // another new word so today's quota still means new words learned.
+  function alreadyKnown(id) {
+    state.cards[id] = { interval: 7, ease: 2.6, due: addDays(today(), 7), reps: 1, lapses: 0 };
+    const before = session.queue.length;
+    session.queue = session.queue.filter((q) => q.id !== id);
+    session.total -= before - session.queue.length;
+    session.need[id] = 0;
+    session.known = (session.known || 0) + 1;
+    state.newToday.count = Math.max(0, state.newToday.count - 1);
+    const next = unlearnedIds().find((w) => !(w in session.need));
+    if (next) {
+      session.need[next] = 2;
+      session.queue.unshift({ id: next, type: 'intro' }, { id: next, type: 'meaning' });
+      session.queue.push({ id: next, type: 'pinyin' });
+      session.total += 3;
+    }
+    session.answer.known = true;
+    session.answer.replacement = next || null;
+  }
+
   function finishSession() {
     const cards = Object.keys(session.need).length;
     const perfect = session.failed.size === 0 && cards >= 3;
@@ -464,7 +493,7 @@
     state.xp += bonus;
     const level = levelInfo();
     lastSummary = {
-      mode: session.mode, cards, clean: cards - session.failed.size, perfect, justCompleted,
+      mode: session.mode, cards, clean: cards - session.failed.size, perfect, justCompleted, known: session.known || 0,
       xp: session.xp + bonus, levelUp: level.n > session.startLevel ? level : null, badges: awardBadges(),
     };
     session = null;
@@ -533,6 +562,95 @@
     test = null;
     view = 'testResult';
     render();
+  }
+
+  // ---------- HSK level test ----------
+
+  const LT_PER_LEVEL = 6;
+  const LT_PASS = 5; // of 6: you know most of a level's words, not just a lucky guess or two
+  const LT_TOP = 6;
+  const levelPool = (n) => (n === 1 ? WORDS : window.LEVEL_WORDS[n]);
+  const LEVEL_BLURB = {
+    0: 'Just starting out. HSK 1 is exactly what these lessons teach.',
+    1: 'You know the basics: greetings, numbers, everyday words.',
+    2: 'You can handle simple, everyday situations.',
+    3: 'You can get by in daily life, at work, school and travelling.',
+    4: 'You can talk about a wide range of topics fairly fluently.',
+    5: 'You can read newspapers and follow films and TV.',
+    6: 'You understand nearly everything you read and hear.',
+  };
+
+  // Starts at HSK 1 and climbs a level at a time, stopping at the first level you don't pass.
+  function startLevelTest() {
+    lt = { level: 1, q: 0, right: 0, words: [], log: [], known: [] };
+    nextLevel();
+  }
+
+  function nextLevel() {
+    lt.words = shuffle(levelPool(lt.level)).slice(0, LT_PER_LEVEL);
+    lt.q = 0;
+    lt.right = 0;
+    nextLevelQuestion();
+  }
+
+  function nextLevelQuestion() {
+    const pool = levelPool(lt.level);
+    const word = lt.words[lt.q];
+    const seen = new Set([word.m]);
+    const others = [];
+    for (const w of shuffle(pool)) {
+      if (seen.has(w.m)) continue;
+      seen.add(w.m);
+      others.push(w);
+      if (others.length === 3) break;
+    }
+    lt.current = { word, options: shuffle([word, ...others]) };
+    render();
+  }
+
+  function levelTestAnswer(given) {
+    const { word } = lt.current;
+    if (given === word.h) {
+      lt.right++;
+      if (lt.level === 1) lt.known.push(word.h);
+    }
+    lt.q++;
+    if (lt.q < LT_PER_LEVEL) return nextLevelQuestion();
+    const passed = lt.right >= LT_PASS;
+    lt.log.push({ level: lt.level, right: lt.right, passed });
+    if (passed && lt.level < LT_TOP) {
+      lt.level++;
+      return nextLevel();
+    }
+    finishLevelTest();
+  }
+
+  function finishLevelTest() {
+    const reached = lt.log.filter((l) => l.passed).length;
+    // HSK 1 words answered right count as known, like the placement test, and come back in reviews.
+    let added = 0;
+    for (const id of lt.known) {
+      if (state.cards[id]) continue;
+      state.cards[id] = { interval: 3, ease: 2.5, due: addDays(today(), 1 + Math.floor(Math.random() * 7)), reps: 1, lapses: 0 };
+      added++;
+    }
+    state.levelTests = [...state.levelTests, { date: today(), level: reached }].slice(-10);
+    if (!state.placement) state.placement = { date: today(), known: added };
+    const xp = lt.log.reduce((n, l) => n + l.right, 0) * 2;
+    state.xp += xp;
+    ltResult = { level: reached, log: lt.log, added, xp, badges: awardBadges() };
+    lt = null;
+    save();
+    view = 'levelResult';
+    render();
+    if (reached) {
+      play('complete');
+      Fun.confetti();
+    }
+  }
+
+  function lastLevel() {
+    return state.levelTests.length ? state.levelTests[state.levelTests.length - 1] : null;
   }
 
   // ---------- HSK mock test ----------
@@ -624,6 +742,8 @@
     if (session) return renderSession();
     if (test) return renderTest();
     if (exam) return renderExam();
+    if (lt) return renderLevelTest();
+    if (view === 'levelResult') return renderLevelResult();
     if (view === 'testResult') return renderTestResult();
     if (view === 'exam') return renderExamIntro();
     if (view === 'examResult') return renderExamResult();
@@ -656,7 +776,7 @@
 
   // The bottom tab bar. Hidden during lessons and tests so there's nothing to wander off to.
   function nav() {
-    const here = view === 'examResult' ? 'exam' : view === 'summary' || view === 'testResult' ? 'home' : view;
+    const here = view === 'examResult' || view === 'levelResult' ? 'exam' : view === 'summary' || view === 'testResult' ? 'home' : view;
     const tabs = TABS.map(
       ([id, label]) => `<button class="${here === id ? 'on' : ''}" data-action="go" data-view="${id}">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg>
@@ -840,6 +960,7 @@
     $app.innerHTML = `${header()}<main>
       <h1 class="page-title">Progress</h1>
       ${statsBlock()}
+      ${lastLevel() ? `<p class="label">HSK level test</p><section class="card slim">Your level: <b>${lastLevel().level ? `HSK ${lastLevel().level}` : 'Pre-HSK 1'}</b> · ${lastLevel().date}</section>` : ''}
       ${best ? `<p class="label">HSK 1 mock test</p><section class="card slim">Best score <b>${best.score} / ${best.max}</b> ${best.passed ? '· passed ✓' : '· not passed yet'}</section>` : ''}
     </main>${nav()}`;
   }
@@ -883,7 +1004,18 @@
     const idk = a ? '' : '<button type="button" class="link idk-link" data-action="dontKnow">I don\'t know</button>';
     let body = '';
 
-    if (type === 'intro') {
+    if (type === 'intro' && !session.current.revealed) {
+      // Show the characters alone first, so a word you already know can be skipped.
+      body = `
+        <p class="label">New word</p>
+        <div class="hanzi">${w.h}</div>
+        ${canSpeak() ? `<button class="btn ghost" data-action="speak" data-text="${esc(w.h)}">🔊 Hear it</button>` : ''}
+        <p class="ask">Do you already know this word?</p>
+        <div class="choice">
+          <button class="btn primary" data-action="reveal">Teach me</button>
+          <button class="btn ghost" data-action="knowIt">I already know it</button>
+        </div>`;
+    } else if (type === 'intro') {
       body = `
         <p class="label">New word</p>
         <div class="hanzi">${w.h}</div>
@@ -907,7 +1039,8 @@
         ${idk}`;
     } else {
       let prompt;
-      if (type === 'meaning') prompt = `<p class="label">What does this mean?</p><div class="hanzi">${w.h}</div>`;
+      if (session.current.prove) prompt = `<p class="label">Quick check · What does this mean?</p><div class="hanzi">${w.h}</div>`;
+      else if (type === 'meaning') prompt = `<p class="label">What does this mean?</p><div class="hanzi">${w.h}</div>`;
       else if (type === 'hanzi') prompt = `<p class="label">Which one means…</p><div class="meaning xl">${esc(w.m)}</div>`;
       else
         prompt = `<p class="label">Which one did you hear?</p>
@@ -928,10 +1061,17 @@
     }
 
     const verdict = a
-      ? a.correct
+      ? a.known
+        ? `<p class="verdict"><span class="hanzi-inline">好厉害!</span> <small>hǎo lì hai · So good!</small></p>
+           <p class="gain"><span>⭐ +${a.gain} XP</span></p>
+           <p class="known-note">Skipped. It comes back in a week to check you still know it.${a.replacement ? ' A different new word takes its place.' : ''}</p>`
+        : a.correct
         ? `<p class="verdict"><span class="hanzi-inline">${a.praise[0]}</span> <small>${esc(a.praise[1])} · ${esc(a.praise[2])}</small></p>
            <p class="gain"><span>⭐ +${a.gain} XP</span>${a.combo >= 2 ? `<span class="combo">🔥 ${a.combo} in a row</span>` : ''}</p>
            ${a.levelUp ? `<p class="levelup">Level up! You're now Lv ${a.levelUp.n} · ${a.levelUp.h} (${esc(a.levelUp.m)})</p>` : ''}`
+        : session.current.prove
+          ? `<p class="verdict"><span class="hanzi-inline">没关系!</span> <small>méi guānxi · No worries!</small></p>
+             <p class="gain">Not quite. Let's learn this one properly.</p>`
         : a.skipped
           ? `<p class="verdict"><span class="hanzi-inline">没关系!</span> <small>méi guānxi · No worries!</small></p>
              <p class="gain">Here's the answer. It comes back later so you can learn it.</p>`
@@ -1015,8 +1155,14 @@
 
   function renderExamIntro() {
     const history = [...state.exams].reverse();
+    const ll = lastLevel();
     $app.innerHTML = `${header()}<main>
       <h1 class="page-title">Test yourself</h1>
+      <section class="card level-card">
+        <div class="card-head"><div class="lvl-badge">${ll ? (ll.level ? `HSK<b>${ll.level}</b>` : 'HSK<b>0</b>') : 'HSK<b>?</b>'}</div><div><h2>What's my HSK level?</h2>
+          <p>About 5 minutes. Climbs from HSK 1 to HSK 6 and stops when the words get too hard.${ll ? ` Last result: <b>${ll.level ? `HSK ${ll.level}` : 'Pre-HSK 1'}</b> on ${ll.date}.` : ''}</p></div></div>
+        <button class="btn primary" data-action="levelTest">${ll ? 'Test my level again' : 'Find my level'}</button>
+      </section>
       <section class="card">
         <div class="card-head">${Fun.panda('happy', 64)}<div><h2>HSK 1 mock test</h2>
           <p>Words from the whole HSK 1 list, including ones you haven't learned yet. No hints, and no answers until the end.</p></div></div>
@@ -1026,7 +1172,7 @@
           <li>Pass mark ${EXAM_PASS * 100}%, like the real exam</li>
         </ul>
         <div class="row">
-          <button class="btn primary" data-action="exam" data-count="20">Quick test · 20 questions</button>
+          <button class="btn ghost" data-action="exam" data-count="20">Quick test · 20 questions</button>
           <button class="btn ghost" data-action="exam" data-count="40">Full test · 40 questions</button>
         </div>
         <small class="fine">The real HSK 1 also uses short sentences. This checks how well you know the words, and doesn't count as your daily lesson.</small>
@@ -1043,6 +1189,52 @@
         <p>${state.placement && state.placement.date ? `Last taken ${state.placement.date}. ` : ''}Already know some words? This finds your level and skips the ones you know. It only ever adds words.</p>
         <button class="btn ghost" data-action="test">${state.placement && state.placement.date ? 'Retake' : 'Take'} the placement test</button>
       </section>
+    </main>${nav()}`;
+  }
+
+  function renderLevelTest() {
+    const { word, options } = lt.current;
+    const done = (lt.level - 1) * LT_PER_LEVEL + lt.q;
+    const opts = options
+      .map((o, i) => `<button class="opt-btn" data-action="ltChoose" data-id="${esc(o.h)}"><kbd>${i + 1}</kbd>${esc(o.m)}</button>`)
+      .join('');
+    $app.innerHTML = `
+      ${header()}
+      <div class="exam-bar"><span>HSK ${lt.level} words</span><span>${lt.q + 1} of ${LT_PER_LEVEL}</span></div>
+      <div class="ladder">${[1, 2, 3, 4, 5, 6]
+        .map((n) => `<i class="${n < lt.level ? 'done' : n === lt.level ? 'now' : ''}">${n}</i>`)
+        .join('')}</div>
+      <main class="lesson enter" data-progress="${done}">
+        <p class="label">What does this mean?</p>
+        <div class="hanzi">${word.h}</div>
+        <div class="opts">${opts}</div>
+        <button class="link idk-link" data-action="ltChoose" data-id="">I don't know</button>
+      </main>`;
+  }
+
+  function renderLevelResult() {
+    const r = ltResult;
+    const rows = r.log
+      .map((l) => `<div class="list-row"><span>HSK ${l.level}</span><span>${l.right} of ${LT_PER_LEVEL} known</span><b class="${l.passed ? 'pass' : 'fail'}">${l.passed ? 'Passed ✓' : 'Not yet'}</b></div>`)
+      .join('');
+    const hsk1Left = WORDS.filter((w) => !state.cards[w.h]).length;
+    $app.innerHTML = `${header()}<main>
+      <section class="card ok celebrate">
+        ${Fun.panda(r.level >= 3 ? 'love' : r.level ? 'cheer' : 'happy', 104)}
+        <p class="praise">${r.level ? '<b class="hanzi-inline">太棒了!</b> <small>tài bàng le · Awesome!</small>' : '<b class="hanzi-inline">加油!</b> <small>jiā yóu · Let\'s go!</small>'}</p>
+        <p class="eyebrow">Your vocabulary level</p>
+        <h1 class="score">${r.level ? `HSK ${r.level}` : 'Pre-HSK 1'}</h1>
+        <p>${LEVEL_BLURB[r.level]}</p>
+        <div class="chips"><span>⭐ +${r.xp} XP</span>${r.added ? `<span>✓ ${r.added} HSK 1 words skipped</span>` : ''}</div>
+        ${r.badges.map((b) => `<p class="new-badge"><span>${b.icon}</span> New badge: <b>${esc(b.name)}</b></p>`).join('')}
+        <div class="row">
+          ${hsk1Left && r.level ? '<button class="btn primary" data-action="test">Skip more HSK 1 words I know</button>' : ''}
+          <button class="btn ${hsk1Left && r.level ? 'ghost' : 'primary'}" data-action="home">Go to today's lesson</button>
+        </div>
+      </section>
+      <p class="label">Level by level</p>
+      <section class="card list">${rows}</section>
+      <p class="fine">Based on samples from the classic 6-level HSK word lists: ${LT_PASS} of ${LT_PER_LEVEL} words right passes a level. It measures vocabulary, not grammar or listening, so treat it as a guide. Lessons here teach HSK 1.</p>
     </main>${nav()}`;
   }
 
@@ -1141,7 +1333,7 @@
         ${Fun.panda(s.clean === s.cards ? 'love' : 'cheer', 120)}
         <p class="praise"><b class="hanzi-inline">太棒了!</b> <small>tài bàng le · Awesome!</small></p>
         <h1>${title}</h1>
-        <p>${s.clean} of ${s.cards} words right on the first try.</p>
+        <p>${s.clean} of ${s.cards} words right on the first try.${s.known ? ` ${s.known} you already knew, so they were skipped.` : ''}</p>
         <div class="chips">${chips.join('')}</div>
         ${s.levelUp ? `<p class="levelup">Level up! You're now Lv ${s.levelUp.n} · ${s.levelUp.h} (${esc(s.levelUp.p)}, ${esc(s.levelUp.m)})</p>` : ''}
         ${s.badges.map((b) => `<p class="new-badge"><span>${b.icon}</span> New badge: <b>${esc(b.name)}</b></p>`).join('')}
@@ -1245,6 +1437,23 @@
     examChoose(el) {
       if (exam) examAnswer(el.dataset.id);
     },
+    levelTest: startLevelTest,
+    ltChoose(el) {
+      if (lt) levelTestAnswer(el.dataset.id);
+    },
+    reveal() {
+      if (session && session.current.type === 'intro') {
+        session.current.revealed = true;
+        render();
+      }
+    },
+    knowIt() {
+      if (!session || session.current.type !== 'intro') return;
+      const { id } = session.current;
+      session.current = { id, type: 'meaning', prove: true, options: buildOptions(id, 'meaning') };
+      session.answer = null;
+      render();
+    },
     dontKnow() {
       if (session && !session.answer && session.current.type !== 'intro') answer(false, '', true);
     },
@@ -1342,6 +1551,11 @@
       if (btn) btn.click();
       return;
     }
+    if (lt && /^[1-4]$/.test(e.key)) {
+      const btn = $app.querySelectorAll('.opt-btn[data-action="ltChoose"]')[Number(e.key) - 1];
+      if (btn) btn.click();
+      return;
+    }
     if (exam && /^[1-4]$/.test(e.key)) {
       const btn = $app.querySelectorAll('.opt-btn[data-action="examChoose"]')[Number(e.key) - 1];
       if (btn) btn.click();
@@ -1352,6 +1566,9 @@
     if (!session.answer && /^[1-4]$/.test(e.key) && tag !== 'INPUT') {
       const btn = $app.querySelectorAll('[data-action="choose"]')[Number(e.key) - 1];
       if (btn) btn.click();
+    } else if (e.key === 'Enter' && session.current.type === 'intro' && !session.current.revealed && tag !== 'BUTTON') {
+      e.preventDefault();
+      actions.reveal();
     } else if (e.key === 'Enter' && (session.answer || session.current.type === 'intro') && tag !== 'BUTTON') {
       e.preventDefault();
       next();
