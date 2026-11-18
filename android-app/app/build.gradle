@@ -51,7 +51,7 @@ android {
 def copyWeb = tasks.register('copyWeb', Copy) {
     from(rootProject.file('../docs')) {
         // sw.js is not run in the app; Updater reads the version number from it.
-        include 'index.html', 'app.js', 'fun.js', 'shared.js', 'words.js', 'levels.js', 'styles.css', 'icon-*.png', 'sw.js'
+        include 'index.html', 'app.js', 'fun.js', 'shared.js', 'words.js', 'levels.js', 'talk.js', 'styles.css', 'icon-*.png', 'sw.js'
     }
     into "$buildDir/generated/web/www"
 }

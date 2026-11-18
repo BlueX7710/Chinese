@@ -29,12 +29,14 @@
   let session = null; // active lesson, or null on the home/settings screens
   let test = null; // active placement test
   let testResult = null;
+  let chat = null; // active conversation practice
+  let talkId = null; // conversation open on the Talk tab
   let lt = null; // active HSK level test
   let ltResult = null;
   let exam = null; // active HSK mock test
   let examTimer = null;
   let examResult = null;
-  const busy = () => !!(session || test || exam || lt); // mid-lesson or mid-test: don't redraw underneath
+  const busy = () => !!(session || test || exam || lt || chat); // mid-lesson or mid-test: don't redraw underneath
   let barPct = 0; // where the lesson progress bar last stood, so it can animate
 
   // Installing: Chrome/Edge/Android fire beforeinstallprompt; iPhone Safari needs the Share sheet.
@@ -77,6 +79,8 @@
       badges: {}, // badge id -> date earned
       exams: [], // last HSK mock tests: { date, score, max, passed }
       levelTests: [], // HSK level test results: { date, level }
+      talks: {}, // conversation id -> date last practised
+      readyHsk1: null, // date the learner first met every "ready for HSK 2" goal
     };
   }
 
@@ -245,6 +249,8 @@
     { id: 'master10', icon: '🧠', name: 'Long memory', how: 'Master 10 words', test: () => wordsMastered() >= 10 },
     { id: 'hsk3', icon: '🏅', name: 'HSK 3 level', how: 'Reach HSK 3 in the level test', test: () => state.levelTests.some((t) => t.level >= 3) },
     { id: 'hskpass', icon: '📝', name: 'HSK ready', how: 'Pass an HSK 1 mock test', test: () => state.exams.some((e) => e.passed) },
+    { id: 'chat5', icon: '💬', name: 'Chatterbox', how: 'Practise 5 different conversations', test: () => Object.keys(state.talks).length >= 5 },
+    { id: 'ready2', icon: '🚀', name: 'Ready for HSK 2', how: 'Meet every goal on the HSK 1 readiness check', test: () => !!state.readyHsk1 },
     { id: 'hsk1', icon: '🐉', name: 'HSK 1 hero', how: `Learn all ${WORDS.length} words`, test: () => wordsSeen() >= WORDS.length },
   ];
 
@@ -564,6 +570,132 @@
     render();
   }
 
+  // ---------- HSK 1 readiness ----------
+
+  // "Solid" means recalled correctly at least twice and not due again for a week or more, so a
+  // word skipped with "I already know it" needs one real review before it counts.
+  const isSolid = (c) => !!c && c.reps >= 2 && c.interval >= 7;
+  const READY_SOLID = 0.8;
+  const READY_EXAM = 0.8;
+  const READY_EXAM_DAYS = 14;
+
+  function readiness() {
+    const total = WORDS.length;
+    const seen = WORDS.filter((w) => state.cards[w.h]).length;
+    const solid = WORDS.filter((w) => isSolid(state.cards[w.h])).length;
+    const since = addDays(today(), -READY_EXAM_DAYS);
+    const best = state.exams.filter((e) => e.date >= since).reduce((b, e) => Math.max(b, e.score / e.max), 0);
+    const goals = [
+      {
+        name: `Learn all ${total} HSK 1 words`, have: `${seen} of ${total}`, part: seen / total,
+        hint: 'Keep doing your daily lessons, and skip the words you already know.',
+      },
+      {
+        name: `Remember them: ${Math.ceil(total * READY_SOLID)} words solid`, have: `${solid} solid`, part: solid / (total * READY_SOLID),
+        hint: "A word turns solid once you've recalled it after a week or more. Your reviews do this for you.",
+      },
+      {
+        name: `Score ${READY_EXAM * 100}%+ on an HSK 1 mock test`,
+        have: best ? `best ${Math.round(best * 100)}% in the last ${READY_EXAM_DAYS} days` : `none in the last ${READY_EXAM_DAYS} days`,
+        part: best / READY_EXAM,
+        hint: "The real exam passes at 60%, so 80% means you're comfortably there.",
+        action: 'exam',
+      },
+    ].map((g) => ({ ...g, part: Math.min(1, g.part), done: g.part >= 1 }));
+    const pct = Math.round((100 * goals.reduce((n, g) => n + g.part, 0)) / goals.length);
+    return { goals, pct, ready: goals.every((g) => g.done) };
+  }
+
+  // Celebrates, once, the first time every goal is met.
+  function checkReady() {
+    if (state.readyHsk1 || !readiness().ready) return;
+    state.readyHsk1 = today();
+    awardBadges();
+    save();
+    setTimeout(() => {
+      Fun.toast("🚀 <b>You're ready for HSK 2!</b> See the Progress tab.");
+      Fun.confetti();
+      play('level');
+    }, 600);
+  }
+
+  // ---------- conversations ----------
+
+  const TALKS = window.TALKS || [];
+  const talkById = (id) => TALKS.find((t) => t.id === id);
+  // A different conversation each day, the same one all day.
+  const todaysTalk = () => TALKS[Math.floor(new Date(today() + 'T00:00').getTime() / 86400000) % TALKS.length];
+
+  // Speaks lines one after another. A new call cancels the one before.
+  let playToken = 0;
+  function playLines(lines) {
+    const token = ++playToken;
+    let i = 0;
+    const step = () => {
+      if (token !== playToken || i >= lines.length) return;
+      const text = lines[i++];
+      speak(text);
+      setTimeout(step, 900 + text.length * 380);
+    };
+    step();
+  }
+
+  // You play B: A's lines appear by themselves, and for each of yours you pick what to say.
+  function startChat(id) {
+    const t = talkById(id);
+    chat = { t, i: 0, shown: [], right: 0, turns: t.lines.filter((l) => l[0] === 'B').length, waiting: false };
+    advanceChat();
+  }
+
+  function advanceChat() {
+    chat.waiting = false;
+    const said = [];
+    while (chat.i < chat.t.lines.length && chat.t.lines[chat.i][0] === 'A') {
+      chat.shown.push({ line: chat.t.lines[chat.i] });
+      said.push(chat.t.lines[chat.i][1]);
+      chat.i++;
+    }
+    if (chat.i >= chat.t.lines.length) return finishChat(said);
+    const line = chat.t.lines[chat.i];
+    // Wrong choices: your lines from other conversations.
+    const others = shuffle(TALKS.filter((t) => t !== chat.t).flatMap((t) => t.lines.filter((l) => l[0] === 'B')))
+      .filter((l) => l[1] !== line[1] && l[3] !== line[3]) // never two choices that mean the same
+      .slice(0, 2);
+    chat.options = shuffle([line, ...others]);
+    render();
+    if (said.length) playLines(said);
+  }
+
+  function chatAnswer(h) {
+    const line = chat.t.lines[chat.i];
+    const ok = h === line[1];
+    if (ok) chat.right++;
+    chat.shown.push({ line, mine: true, ok, picked: ok ? null : chat.options.find((o) => o[1] === h) });
+    chat.i++;
+    chat.waiting = true; // your reply is read out before the other person answers
+    play(ok ? 'correct' : 'wrong');
+    speak(line[1]);
+    render();
+    const current = chat;
+    setTimeout(() => chat === current && advanceChat(), 700 + line[1].length * 250);
+  }
+
+  function finishChat(said) {
+    const { t, right, turns } = chat;
+    const xp = right * 5 + 10;
+    state.xp += xp;
+    state.talks[t.id] = today();
+    const badges = awardBadges();
+    save();
+    chat.done = { right, turns, xp, badges };
+    render();
+    if (said.length) playLines(said);
+    if (right === turns) {
+      play('complete');
+      Fun.confetti();
+    }
+  }
+
   // ---------- HSK level test ----------
 
   const LT_PER_LEVEL = 6;
@@ -747,7 +879,10 @@
     if (view === 'testResult') return renderTestResult();
     if (view === 'exam') return renderExamIntro();
     if (view === 'examResult') return renderExamResult();
+    if (chat) return renderChat();
+    if (!busy()) checkReady();
     if (view === 'progress') return renderProgress();
+    if (view === 'talk') return talkId ? renderTalk() : renderTalks();
     if (view === 'settings') return renderSettings();
     if (view === 'summary') return renderSummary();
     renderHome();
@@ -770,9 +905,10 @@
     home: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
     exam: '<path d="M8 4h8a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m9 13 2 2 4-5"/>',
     progress: '<path d="M5 20v-7M12 20V5M19 20v-10"/>',
+    talk: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"/><path d="M8.5 9h7M8.5 12h4.5"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
   };
-  const TABS = [['home', 'Learn'], ['exam', 'Test'], ['progress', 'Progress'], ['settings', 'Settings']];
+  const TABS = [['home', 'Learn'], ['talk', 'Talk'], ['exam', 'Test'], ['progress', 'Progress'], ['settings', 'Settings']];
 
   // The bottom tab bar. Hidden during lessons and tests so there's nothing to wander off to.
   function nav() {
@@ -952,13 +1088,149 @@
             <button class="btn ghost" data-action="skipTest">I'm a total beginner</button>
           </div>
         </section>`;
-    $app.innerHTML = `${header()}<main>${blockerOff}${main}${offer}${weekStrip()}${levelCard()}${installHelp()}</main>${nav()}`;
+    const t = todaysTalk();
+    const talkCard = t
+      ? `<button class="card talk-teaser" data-action="openTalk" data-id="${t.id}">
+          <span class="tt-icon">💬</span>
+          <span class="tt-text"><small>Today's conversation</small><b>${esc(t.title)}</b> <span class="hanzi-inline">${t.zh}</span></span>
+          <span class="tt-go">${state.talks[t.id] === today() ? '✓' : '›'}</span>
+        </button>`
+      : '';
+    $app.innerHTML = `${header()}<main>${blockerOff}${main}${offer}${weekStrip()}${readyCard(false)}${talkCard}${levelCard()}${installHelp()}</main>${nav()}`;
+  }
+
+  // The "ready for HSK 2" tracker: compact on the Learn tab, with the full checklist on Progress.
+  function readyCard(full) {
+    const r = readiness();
+    if (r.ready || state.readyHsk1) {
+      return `<section class="card ready done-ready">
+          <div class="rd-head"><span class="rd-emoji">🚀</span><div><b>You're ready for HSK 2!</b>
+          <small>${r.ready ? 'You know HSK 1 well enough to pass the real exam and move up.' : `You got there on ${state.readyHsk1}. Keep reviewing so it stays that way.`}</small></div></div>
+          ${full ? goalList(r) : ''}
+        </section>`;
+    }
+    const left = r.goals.filter((g) => !g.done).length;
+    return `<section class="card ready">
+        <div class="rd-head"><div class="ring" style="--p:${r.pct}"><b>${r.pct}%</b></div>
+          <div><b>Ready for HSK 2?</b><small>${left} goal${left === 1 ? '' : 's'} left before you can move up from HSK 1.</small></div></div>
+        ${full ? goalList(r) : `<button class="link" data-action="go" data-view="progress">See what's left</button>`}
+      </section>`;
+  }
+
+  function goalList(r) {
+    return `<ul class="goals">${r.goals
+      .map(
+        (g) => `<li class="${g.done ? 'met' : ''}">
+          <div class="g-top"><span class="g-check">${g.done ? '✓' : ''}</span><b>${esc(g.name)}</b></div>
+          <div class="bar"><div style="width:${Math.round(g.part * 100)}%"></div></div>
+          <small class="g-have">${esc(g.have)}</small>
+          ${g.done ? '' : `<small class="g-hint">${esc(g.hint)}</small>${g.action ? `<button class="btn ghost small" data-action="go" data-view="${g.action}">Take a mock test</button>` : ''}`}
+        </li>`
+      )
+      .join('')}</ul>`;
+  }
+
+  function renderTalks() {
+    const t = todaysTalk();
+    const done = Object.keys(state.talks).length;
+    $app.innerHTML = `${header()}<main>
+      <h1 class="page-title">Talk</h1>
+      <section class="card today-talk">
+        <p class="eyebrow">Today's conversation</p>
+        <h2>${esc(t.title)} <span class="hanzi-inline">${t.zh}</span></h2>
+        <p class="key"><b class="hanzi-inline">${t.key[0]}</b><small>${esc(t.key[1])} · ${esc(t.key[2])}</small></p>
+        <div class="row">
+          <button class="btn primary" data-action="openTalk" data-id="${t.id}">Read & listen</button>
+          <button class="btn ghost" data-action="chat" data-id="${t.id}">Practise</button>
+        </div>
+      </section>
+      <p class="label">All conversations · ${done} of ${TALKS.length} practised</p>
+      <section class="card list talks">${TALKS.map(
+        (x) => `<button class="list-row talk-row" data-action="openTalk" data-id="${x.id}">
+          <span class="hanzi-inline">${x.zh}</span><span>${esc(x.title)}</span><b class="${state.talks[x.id] ? 'pass' : 'fail'}">${state.talks[x.id] ? '✓' : '›'}</b>
+        </button>`
+      ).join('')}</section>
+    </main>${nav()}`;
+  }
+
+  function bubble(line, extra = '') {
+    const [who, h, p, m] = line;
+    const st = state.settings;
+    return `<div class="msg ${who === 'B' ? 'me' : 'them'} ${extra}">
+        <button class="bubble-btn" data-action="speak" data-text="${esc(h)}">
+          <span class="msg-zh">${h}</span>
+          ${st.showPinyin !== false ? `<span class="msg-py">${esc(p)}</span>` : ''}
+          ${st.showEnglish !== false ? `<span class="msg-en">${esc(m)}</span>` : ''}
+        </button>
+      </div>`;
+  }
+
+  function talkToggles() {
+    const st = state.settings;
+    return `<div class="toggles">
+        <button class="chip ${st.showPinyin !== false ? 'on' : ''}" data-action="toggleTalk" data-key="showPinyin">Pinyin</button>
+        <button class="chip ${st.showEnglish !== false ? 'on' : ''}" data-action="toggleTalk" data-key="showEnglish">English</button>
+        ${canSpeak() ? '<button class="chip" data-action="playTalk">🔊 Play all</button>' : ''}
+      </div>`;
+  }
+
+  function renderTalk() {
+    const t = talkById(talkId);
+    $app.innerHTML = `${header()}<main>
+      <button class="link back" data-action="closeTalk">‹ All conversations</button>
+      <h1 class="page-title">${esc(t.title)} <span class="hanzi-inline">${t.zh}</span></h1>
+      ${talkToggles()}
+      <section class="chat">${t.lines.map((l) => bubble(l)).join('')}</section>
+      <p class="fine center">${canSpeak() ? 'Tap a line to hear it. ' : ''}In practice mode you play the green side.</p>
+      <div class="row"><button class="btn primary" data-action="chat" data-id="${t.id}">Practise this conversation</button></div>
+    </main>${nav()}`;
+  }
+
+  function renderChat() {
+    const { t, shown, options, done } = chat;
+    const msgs = shown
+      .map((x) =>
+        x.mine && !x.ok
+          ? `${bubble(x.line, 'fixed')}<p class="msg-note">Not quite. You picked: ${x.picked ? x.picked[1] : ''}</p>`
+          : bubble(x.line, x.mine ? 'ok' : '')
+      )
+      .join('');
+    let bottom = '';
+    if (done) {
+      bottom = `<section class="card ok celebrate chat-done">
+          ${Fun.panda(done.right === done.turns ? 'love' : 'cheer', 88)}
+          <h2>${done.right === done.turns ? 'Perfect conversation!' : 'Conversation done'}</h2>
+          <p>${done.right} of ${done.turns} replies right.</p>
+          <div class="chips"><span>⭐ +${done.xp} XP</span></div>
+          ${done.badges.map((b) => `<p class="new-badge"><span>${b.icon}</span> New badge: <b>${esc(b.name)}</b></p>`).join('')}
+          <div class="row"><button class="btn primary" data-action="chatAgain">Practise again</button><button class="btn ghost" data-action="chatDone">Done</button></div>
+        </section>`;
+    } else if (!chat.waiting) {
+      const line = t.lines[chat.i];
+      bottom = `<section class="your-turn">
+          <p class="label">Your turn · say “${esc(line[3])}”</p>
+          <div class="opts">${options
+            .map((o) => `<button class="opt-btn say" data-action="chatChoose" data-h="${esc(o[1])}"><span class="hanzi-inline">${o[1]}</span><small>${esc(o[2])}</small></button>`)
+            .join('')}</div>
+        </section>`;
+    }
+    $app.innerHTML = `
+      ${header()}
+      <div class="exam-bar"><span>${esc(t.title)}</span><button class="link" data-action="chatDone">Stop</button></div>
+      <div class="progress"><div style="width:${done ? 100 : Math.round((100 * chat.i) / t.lines.length)}%"></div></div>
+      <main>
+        <section class="chat practice">${msgs}</section>
+        ${bottom}
+      </main>`;
+    const end = $app.querySelector('.your-turn, .chat-done') || $app.querySelector('.chat .msg:last-child');
+    if (end) end.scrollIntoView({ block: 'nearest' });
   }
 
   function renderProgress() {
     const best = state.exams.reduce((b, e) => (!b || e.score / e.max > b.score / b.max ? e : b), null);
     $app.innerHTML = `${header()}<main>
       <h1 class="page-title">Progress</h1>
+      ${readyCard(true)}
       ${statsBlock()}
       ${lastLevel() ? `<p class="label">HSK level test</p><section class="card slim">Your level: <b>${lastLevel().level ? `HSK ${lastLevel().level}` : 'Pre-HSK 1'}</b> · ${lastLevel().date}</section>` : ''}
       ${best ? `<p class="label">HSK 1 mock test</p><section class="card slim">Best score <b>${best.score} / ${best.max}</b> ${best.passed ? '· passed ✓' : '· not passed yet'}</section>` : ''}
@@ -1428,6 +1700,7 @@
     },
     go(el) {
       view = el.dataset.view;
+      if (view === 'talk') talkId = null;
       render();
       window.scrollTo(0, 0);
     },
@@ -1438,6 +1711,44 @@
       if (exam) examAnswer(el.dataset.id);
     },
     levelTest: startLevelTest,
+    openTalk(el) {
+      talkId = el.dataset.id;
+      view = 'talk';
+      render();
+      window.scrollTo(0, 0);
+    },
+    closeTalk() {
+      talkId = null;
+      playToken++;
+      render();
+    },
+    toggleTalk(el) {
+      const k = el.dataset.key;
+      state.settings[k] = state.settings[k] === false;
+      save();
+      render();
+    },
+    playTalk() {
+      playLines(talkById(talkId).lines.map((l) => l[1]));
+    },
+    chat(el) {
+      startChat(el.dataset.id);
+    },
+    chatChoose(el) {
+      if (chat && !chat.done && !chat.waiting) chatAnswer(el.dataset.h);
+    },
+    chatAgain() {
+      const id = chat.t.id;
+      chat = null;
+      startChat(id);
+    },
+    chatDone() {
+      talkId = chat.t.id;
+      chat = null;
+      playToken++;
+      view = 'talk';
+      render();
+    },
     ltChoose(el) {
       if (lt) levelTestAnswer(el.dataset.id);
     },

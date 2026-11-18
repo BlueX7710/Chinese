@@ -141,6 +141,38 @@ function fakeAndroid() {
   if (!/HSK 4\s*0 of 6 known\s*Not yet/.test(lvl.replace(/\s+/g, ' '))) fail('level test: did not stop at HSK 4');
   if ((await p.evaluate(() => JSON.parse(localStorage.state).levelTests.at(-1).level)) !== 3) fail('level test: result not saved');
 
+  // 1d. Talk: practise today's conversation, answering every reply right.
+  await p.click('[data-view=talk]');
+  await p.click('.today-talk [data-action=chat]');
+  for (;;) {
+    await p.waitForSelector('.your-turn, .chat-done', { timeout: 15000 });
+    if (await p.$('.chat-done')) break;
+    const want = (await p.textContent('.your-turn .label')).match(/say “(.*)”/)[1];
+    const title = await p.textContent('.exam-bar span');
+    const h = await p.evaluate(([t, m]) => TALKS.find((x) => x.title === t).lines.find((l) => l[0] === 'B' && l[3] === m)[1], [title, want]);
+    await p.click(`[data-action=chatChoose][data-h="${h}"]`);
+  }
+  if (!/Perfect conversation/.test(await p.textContent('.chat-done'))) fail('Talk: perfect practice not recognised');
+  if (!Object.keys(await p.evaluate(() => JSON.parse(localStorage.state).talks)).length) fail('Talk: practice not saved');
+  await p.click('[data-action=chatDone]');
+  if (!(await p.$('.chat .msg.me'))) fail('Talk: conversation page shows no lines');
+
+  // 1e. Readiness: this beginner isn't ready; with every word solid and a recent 85% mock test, they are.
+  await p.click('[data-view=progress]');
+  if ((await p.$$('.goals li')).length !== 3) fail('Readiness: checklist missing on Progress');
+  if (/You're ready for HSK 2/.test(await p.textContent('main'))) fail('Readiness: beginner wrongly told they are ready');
+  await p.evaluate(() => {
+    const st = JSON.parse(localStorage.state);
+    for (const w of WORDS) st.cards[w.h] = { interval: 12, ease: 2.6, due: '2999-01-01', reps: 3, lapses: 0 };
+    st.exams.push({ date: dayStr(), score: 85, max: 100, passed: true });
+    localStorage.state = JSON.stringify(st);
+  });
+  await p.reload();
+  await p.click('[data-view=progress]');
+  if (!/You're ready for HSK 2/.test(await p.textContent('main'))) fail('Readiness: fully prepared learner not told they are ready');
+  const rs = await p.evaluate(() => JSON.parse(localStorage.state));
+  if (!rs.readyHsk1 || !rs.badges.ready2) fail('Readiness: date or badge not saved');
+
   // 2. Phone: placement test for someone who knows exactly the first 60 words.
   p = await open({ ...devices['iPhone 13'] });
   await p.goto(url);

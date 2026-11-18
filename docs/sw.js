@@ -2,7 +2,7 @@
 // version shows up the first time the app is opened; the cache is only the fallback when offline
 // or the network is too slow. The Android app reads the version number and FILES list below to
 // update itself (see android-app/.../Updater.java), so keep both accurate.
-const CACHE = 'hanzi-v11';
+const CACHE = 'hanzi-v12';
 const FILES = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const FILES = [
   './shared.js',
   './words.js',
   './levels.js',
+  './talk.js',
   './styles.css',
   './manifest.webmanifest',
   './icon-192.png',

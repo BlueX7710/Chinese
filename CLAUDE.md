@@ -47,8 +47,10 @@ done. It runs as a website, an Android app and a Chrome extension. It's the owne
 
 ## Where things stand (October 2026)
 
-- Website with four tabs (`view`: home, exam, progress, settings; the tab bar is hidden while
-  `busy()`), HSK level test (`lt`, sample words for HSK 2–6 in `docs/levels.js`, results in
+- Website with five tabs (`view`: home, talk, exam, progress, settings; the tab bar is hidden while
+  `busy()`), Talk tab (conversations in `docs/talk.js`, practice in `chat`, progress in
+  `state.talks`), "Ready for HSK 2" tracker (`readiness()`, first reached in `state.readyHsk1`),
+  HSK level test (`lt`, sample words for HSK 2–6 in `docs/levels.js`, results in
   `state.levelTests`), "I already know it" on new words (a quick check, then `alreadyKnown()` swaps in
   another new word), HSK 1 mock test (`exam`, results in `state.exams`), "I don't know" on every question,
   placement test, frequency labels, XP/levels/badges with Bao the panda, Chrome extension
